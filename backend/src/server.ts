@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', app: env.appName, environment: env.environment });
+  res.json({ status: 'ok', app: env.appName, environment: env.environment, database: supabase ? 'configured' : 'not_configured', time: new Date().toISOString() });
 });
 
 app.get('/api/users', (_req, res) => {
@@ -74,6 +74,16 @@ app.post('/api/me/password', async (req, res) => {
 
 app.get('/api/premium/features', (_req, res) => {
   res.json({ plan: 'premium', features: ['HD voice and video calls', 'Custom themes and profile badges', 'Larger file uploads', 'Message editing and history', 'Priority support'] });
+});
+
+app.post('/api/premium/activate', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  const licenseKey = String(req.body?.licenseKey ?? '').trim();
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  if (!licenseKey || !env.premiumLicenseKeys.includes(licenseKey)) return res.status(403).json({ error: 'Invalid premium license key.' });
+  const { data, error } = await supabase.from('users').update({ plan: 'premium' }).eq('id', userId).select('*').single();
+  if (error || !data) return res.status(500).json({ error: 'Could not activate premium.' });
+  return res.json({ status: 'premium_activated', user: publicUser(data) });
 });
 
 app.post('/api/me/devices', async (req, res) => {

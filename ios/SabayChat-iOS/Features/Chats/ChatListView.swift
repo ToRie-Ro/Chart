@@ -9,6 +9,8 @@ struct ChatListView: View {
     @State private var showProfile = false
     @State private var selectedTab = "Chats"
     @State private var presenceSocket: URLSessionWebSocketTask?
+    @State private var serverOnline = false
+    @State private var pulse = false
 
     private var filtered: [Conversation] {
         guard !search.isEmpty else { return conversations }
@@ -24,6 +26,7 @@ struct ChatListView: View {
                         HStack {
                             Text("SabayChart").font(.title2.bold()).foregroundStyle(.white)
                             Spacer()
+                            HStack(spacing: 5) { Circle().fill(serverOnline ? SabayChatColors.success : .red).frame(width: 7, height: 7).scaleEffect(pulse ? 1.35 : 1).animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: pulse); Text(serverOnline ? "Live" : "Offline").font(.caption2).foregroundStyle(SabayChatColors.textSecondary) }
                             Image(systemName: "bell").foregroundStyle(.white)
                             Button { showProfile = true } label: { Image(systemName: "person.crop.circle.fill").foregroundStyle(.white) }
                         }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
@@ -42,7 +45,7 @@ struct ChatListView: View {
                     }
                     HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
-            }.task { await load(); connectPresence() }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
+            }.task { await load(); await checkServer(); connectPresence(); pulse = true }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
                 .fullScreenCover(isPresented: $showProfile) { ProfileView() }
         }.preferredColorScheme(.dark)
     }
@@ -58,6 +61,7 @@ struct ChatListView: View {
     private func state(title: String, detail: String) -> some View { VStack(spacing: 10) { Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 34)); Text(title).font(.headline); Text(detail).font(.subheadline).multilineTextAlignment(.center).foregroundStyle(SabayChatColors.textSecondary) }.foregroundStyle(.white).padding().frame(maxHeight: .infinity) }
     private func load() async { do { var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); if let token = keychainToken() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; let (data, response) = try await URLSession.shared.data(for: request); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
     private func connectPresence() { guard let token = keychainToken(), let url = URL(string: "wss://chart-ztyk.onrender.com/ws?token=\(token)") else { return }; presenceSocket = URLSession.shared.webSocketTask(with: url); presenceSocket?.resume() }
+    private func checkServer() async { guard let url = URL(string: "https://chart-ztyk.onrender.com/health") else { return }; serverOnline = (try? await URLSession.shared.data(from: url)) != nil }
 }
 
 private struct UtilityView: View {
@@ -68,6 +72,7 @@ private struct UtilityView: View {
     @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var notice = ""
+    @State private var licenseKey = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
@@ -77,7 +82,7 @@ private struct UtilityView: View {
                 Label("Da Rea", systemImage: "person.crop.circle.fill"); Label("Sokha Mean", systemImage: "person.crop.circle.fill")
             }
             else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
-            else { Text("Account").font(.headline); TextField("Email address", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); TextField("Phone number", text: $phone).keyboardType(.phonePad).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("Current password", text: $currentPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("New password", text: $newPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button("Save account changes") { notice = "Settings saved on this device." }.buttonStyle(.borderedProminent); Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
+            else { Text("Account").font(.headline); TextField("Email address", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); TextField("Phone number", text: $phone).keyboardType(.phonePad).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("Current password", text: $currentPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("New password", text: $newPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button("Save account changes") { notice = "Settings saved on this device." }.buttonStyle(.borderedProminent); Text("Premium").font(.headline).padding(.top, 8); HStack { TextField("License key", text: $licenseKey).textInputAutocapitalization(.characters).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button { notice = licenseKey.isEmpty ? "Enter a license key." : "License sent for verification." } label: { Image(systemName: "checkmark.seal").foregroundStyle(.white).padding(12).background(SabayChatColors.primary).clipShape(Circle()) } }; Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
             if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             Spacer()
         }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading)

@@ -3,6 +3,7 @@ package com.sabaychat.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -132,17 +134,20 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Chat?>(null) }
     var tab by remember { mutableStateOf("Chats") }
+    var serverOnline by remember { mutableStateOf(false) }
+    val pulse by rememberInfiniteTransition(label = "server").animateFloat(1f, 1.25f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse")
     DisposableEffect(profile.token) {
         val client = OkHttpClient()
         val socket = client.newWebSocket(Request.Builder().url("wss://chart-ztyk.onrender.com/ws?token=${profile.token}").build(), object : WebSocketListener() {})
         onDispose { socket.close(1000, "App closed"); client.dispatcher.executorService.shutdown() }
     }
     LaunchedEffect(Unit) { try { chats = loadChats(profile.token) } catch (_: Exception) { error = "Cannot connect to the server." }; loading = false }
+        LaunchedEffect(Unit) { serverOnline = checkServer() }
     if (selected != null) { ConversationScreen(selected!!, profile.token, onBack = { selected = null }); return }
     if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)
-    else if (tab != "Chats") UtilityScreen(tab) { tab = "Chats" }
+    else if (tab != "Chats") UtilityScreen(tab, profile.token) { tab = "Chats" }
     else Column(Modifier.fillMaxSize().background(Navy)) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Icon(Icons.Default.Notifications, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Text(if (serverOnline) "Live" else "Offline", color = if (serverOnline) Color(0xFF52D39B) else Color(0xFFFF8A80), modifier = Modifier.graphicsLayer(scaleX = if (serverOnline) pulse else 1f, scaleY = if (serverOnline) pulse else 1f)); Spacer(Modifier.width(8.dp)); Icon(Icons.Default.Notifications, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill("All Chats", true); Pill("Personal", false); Pill("Groups", false) }
         Field(search, { search = it }, "Search chats, groups, and people...", KeyboardType.Text, ImeAction.Search)
         when { loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(32.dp), color = Blue); error.isNotEmpty() -> Text(error, color = Color.White, modifier = Modifier.padding(20.dp)); else -> LazyColumn(Modifier.weight(1f)) { items(chats.filter { it.name.contains(search, true) }) { chat -> ChatRow(chat) { selected = chat } } } }
@@ -154,7 +159,30 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
 @Composable private fun ChatRow(chat: Chat, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Text(chat.name.take(1).uppercase(), color = Color.White, modifier = Modifier.size(52.dp).background(Blue.copy(alpha = .35f), CircleShape).padding(16.dp)); Spacer(Modifier.width(14.dp)); Column { Text(chat.name, color = Color.White, style = MaterialTheme.typography.titleMedium); Text(chat.message, color = Muted, maxLines = 1) } } }
 
 @Composable private fun ProfileScreen(profile: UserProfile, onBack: () -> Unit, onLogout: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back", color = Blue) }; Spacer(Modifier.height(24.dp)); Text("Profile", color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(24.dp)); Text(profile.name, color = Color.White, style = MaterialTheme.typography.headlineSmall); Text(profile.email, color = Muted); Spacer(Modifier.height(24.dp)); Text("Account details", color = Muted); Spacer(Modifier.height(8.dp)); Text("Online", color = Color(0xFF52D39B)); Spacer(Modifier.height(32.dp)); Button(onClick = onLogout) { Text("Log out") } } }
-@Composable private fun UtilityScreen(title: String, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back to chats", color = Blue) }; Spacer(Modifier.height(24.dp)); Text(title, color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(18.dp)); when (title) { "Contacts" -> { Text("People you can chat with", color = Muted); Text("Da Rea", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Sokha Mean", color = Color.White, modifier = Modifier.padding(top = 14.dp)) }; "Calls" -> { Text("Your call history", color = Muted); Text("No calls yet", color = Color.White, modifier = Modifier.padding(top = 20.dp)) }; else -> { Text("Notifications", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Dark appearance", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Connected to SabayChart server", color = Color(0xFF52D39B), modifier = Modifier.padding(top = 20.dp)) } } } }
+@Composable private fun UtilityScreen(title: String, token: String, onBack: () -> Unit) {
+    var license by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) {
+        TextButton(onClick = onBack) { Text("Back to chats", color = Blue) }
+        Spacer(Modifier.height(24.dp))
+        Text(title, color = Color.White, style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(18.dp))
+        when (title) {
+            "Contacts" -> { Text("People you can chat with", color = Muted); Text("Da Rea", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Sokha Mean", color = Color.White, modifier = Modifier.padding(top = 14.dp)) }
+            "Calls" -> { Text("Your call history", color = Muted); Text("No calls yet", color = Color.White, modifier = Modifier.padding(top = 20.dp)) }
+            else -> {
+                Text("Notifications", color = Color.White, modifier = Modifier.padding(top = 20.dp))
+                Text("Dark appearance", color = Color.White, modifier = Modifier.padding(top = 20.dp))
+                Text("Premium license", color = Color.White, modifier = Modifier.padding(top = 20.dp))
+                OutlinedTextField(license, { license = it }, label = { Text("License key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Button(onClick = { scope.launch { val response = request("/api/premium/activate", "{\"licenseKey\":\"${license.jsonEscape()}\"}", token); status = if (response.first in 200..299) "Premium activated." else "License could not be activated." } }, modifier = Modifier.padding(top = 8.dp)) { Text("Activate premium") }
+                if (status.isNotEmpty()) Text(status, color = Color.White, modifier = Modifier.padding(top = 8.dp))
+                Text("Connected to SabayChart server", color = Color(0xFF52D39B), modifier = Modifier.padding(top = 20.dp))
+            }
+        }
+    }
+}
 
 @Composable private fun ConversationScreen(chat: Chat, token: String, onBack: () -> Unit) { var draft by remember { mutableStateOf("") }; var messages by remember { mutableStateOf(listOf(chat.message)) }; var status by remember { mutableStateOf("") }; val keyboard = LocalSoftwareKeyboardController.current; val scope = rememberCoroutineScope(); LaunchedEffect(Unit) { try { messages = loadMessages(chat.id, token) } catch (_: Exception) { status = "Could not load message history." } }; Column(Modifier.fillMaxSize().background(Navy)) { TextButton(onClick = onBack) { Text("‹  ${chat.name}", color = Color.White) }; LazyColumn(Modifier.weight(1f).padding(20.dp)) { items(messages) { text -> Text(text, color = Color.White, modifier = Modifier.padding(vertical = 6.dp).background(Color(0xFF18253A), RoundedCornerShape(16.dp)).padding(12.dp)) } }; if (status.isNotEmpty()) Text(status, color = Color(0xFFFFB4AB), modifier = Modifier.padding(horizontal = 20.dp)); Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Field(draft, { draft = it }, "Type a message...", KeyboardType.Text, ImeAction.Done, keyboard = keyboard); Spacer(Modifier.width(8.dp)); Button(onClick = { val text = draft.trim(); if (text.isNotEmpty()) { keyboard?.hide(); draft = ""; scope.launch { val response = request("/api/messages/${chat.id}", "{\"text\":\"${text.jsonEscape()}\"}", token); if (response.first in 200..299) messages = messages + text else status = "Message was not saved." } } }) { Text("Send") } } } }
 
@@ -163,6 +191,7 @@ data class Chat(val id: String, val name: String, val message: String)
 
 private suspend fun authenticate(register: Boolean, name: String, email: String, password: String): Pair<UserProfile?, String?> = withContext(Dispatchers.IO) { if (email.isBlank() || password.isBlank() || (register && name.isBlank())) return@withContext null to "Complete all fields."; if (register && password.length < 6) return@withContext null to "Password must be at least 6 characters."; val response = request("/api/auth/${if (register) "register" else "login"}", "{\"name\":\"${name.jsonEscape()}\",\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}"); if (response.first in 200..299) { val json = JSONObject(response.second); val user = json.getJSONObject("user"); UserProfile(user.optString("name"), user.optString("email"), json.optString("token")) to null } else null to "Server error (${response.first})." }
 private suspend fun loadChats(token: String): List<Chat> = withContext(Dispatchers.IO) { val response = request("/api/conversations", null, token); if (response.first !in 200..299) throw IllegalStateException(); val array = JSONArray(response.second); List(array.length()) { val item = array.getJSONObject(it); Chat(item.optString("id"), item.optString("name", "Conversation"), item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet") } }
+private suspend fun checkServer(): Boolean = withContext(Dispatchers.IO) { runCatching { request("/health", null).first in 200..299 }.getOrDefault(false) }
 private suspend fun loadMessages(id: String, token: String): List<String> = withContext(Dispatchers.IO) { val response = request("/api/messages/$id", null, token); if (response.first !in 200..299) throw IllegalStateException(); val array = JSONArray(response.second); List(array.length()) { array.getJSONObject(it).optString("text") } }
 private suspend fun request(path: String, body: String?, token: String? = null): Pair<Int, String> = withContext(Dispatchers.IO) { val connection = URL(API_BASE_URL + path).openConnection() as HttpURLConnection; try { connection.requestMethod = if (body == null) "GET" else "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000; token?.let { connection.setRequestProperty("Authorization", "Bearer $it") }; if (body != null) { connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json"); connection.outputStream.use { it.write(body.toByteArray()) } }; val responseCode = connection.responseCode; val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream; responseCode to (stream?.bufferedReader()?.use { it.readText() } ?: "") } finally { connection.disconnect() } }
 private fun String.jsonEscape() = replace("\\", "\\\\").replace("\"", "\\\"")

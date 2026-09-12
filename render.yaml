@@ -16,5 +16,7 @@ services:
         value: https://xjvjmmgujnwwpfmacdjb.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: PREMIUM_LICENSE_KEYS
+        sync: false
       - key: JWT_SECRET
         generateValue: true

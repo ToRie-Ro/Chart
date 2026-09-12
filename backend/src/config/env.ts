@@ -17,4 +17,5 @@ export const env = {
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
   environment,
   apiBaseUrl: process.env.API_BASE_URL ?? 'https://chart-ztyk.onrender.com',
+  premiumLicenseKeys: (process.env.PREMIUM_LICENSE_KEYS ?? '').split(',').map((key) => key.trim()).filter(Boolean),
 };
