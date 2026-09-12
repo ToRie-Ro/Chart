@@ -351,7 +351,15 @@ async function register(name: unknown, email: string, password: string) {
   if (participantError) {
     console.error('Registration conversation setup failed:', participantError.message);
     await supabase.from('users').delete().eq('id', data.id);
-    return { status: 500, body: { error: 'Could not finish account setup. Please try again.' } };
+    const databaseSetupError = participantError.code === '42P01' || participantError.code === '23503';
+    return {
+      status: 500,
+      body: {
+        error: databaseSetupError
+          ? 'Chat database is not initialized. Run the complete Supabase schema or migration, then try again.'
+          : 'Could not finish account setup. Please try again.',
+      },
+    };
   }
   const code = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
   const { data: challenge, error: challengeError } = await supabase.from('email_login_challenges').insert({

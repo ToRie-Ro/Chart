@@ -36,7 +36,7 @@ struct WelcomeView: View {
 
     private var authenticationView: some View {
         ZStack {
-            Color(red: 0.96, green: 0.98, blue: 1).ignoresSafeArea()
+            SabayChatColors.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 0) {
                     Spacer(minLength: 62)
@@ -51,7 +51,7 @@ struct WelcomeView: View {
                     Text("MADE IN CAMBODIA 🇰🇭")
                         .font(.caption2.weight(.semibold))
                         .tracking(1.2)
-                        .foregroundStyle(Color(red: 0.38, green: 0.46, blue: 0.58))
+                        .foregroundStyle(SabayChatColors.textSecondary)
                 }
                 .padding(.horizontal, 24)
                 .frame(maxWidth: 440)
@@ -78,10 +78,10 @@ struct WelcomeView: View {
                 .shadow(color: SabayChatColors.primary.opacity(0.28), radius: 18, y: 9)
             Text("សួស្តី! Welcome")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.08, green: 0.13, blue: 0.22))
+                .foregroundStyle(.white)
             Text("Connect with friends across Cambodia securely.")
                 .font(.subheadline)
-                .foregroundStyle(Color(red: 0.40, green: 0.47, blue: 0.58))
+                .foregroundStyle(SabayChatColors.textSecondary)
                 .multilineTextAlignment(.center)
             Spacer().frame(height: 8)
             authButton(title: "Create Account", icon: "person.badge.plus", filled: true) {
@@ -103,18 +103,18 @@ struct WelcomeView: View {
             } label: {
                 Image(systemName: "arrow.left")
                     .font(.headline)
-                    .foregroundStyle(Color(red: 0.10, green: 0.16, blue: 0.25))
+                    .foregroundStyle(.white)
             }.buttonStyle(.plain)
             Text(mode == .register ? "Create Account" : "Sign In")
                 .font(.system(size: 29, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.08, green: 0.13, blue: 0.22))
+                .foregroundStyle(.white)
             progressView(step: 1, total: 2)
             Text(mode == .register ? "Enter your details" : "Welcome back")
                 .font(.title3.bold())
-                .foregroundStyle(Color(red: 0.10, green: 0.16, blue: 0.25))
+                .foregroundStyle(.white)
             Text(mode == .register ? "We will send a 6-digit confirmation code to verify your identity." : "Sign in securely to continue to your conversations.")
                 .font(.subheadline)
-                .foregroundStyle(Color(red: 0.40, green: 0.47, blue: 0.58))
+                .foregroundStyle(SabayChatColors.textSecondary)
             if mode == .register {
                 authField("Display name", text: $name, icon: "person")
             }
@@ -155,14 +155,15 @@ struct WelcomeView: View {
             .textContentType(mode == .login ? .password : .newPassword)
             .padding(.horizontal, 15)
             .padding(.vertical, 14)
-            .background(.white)
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.black.opacity(0.08)))
+            .foregroundStyle(.white)
+            .background(SabayChatColors.surface)
+            .overlay(RoundedRectangle(cornerRadius: 13).stroke(.white.opacity(0.10)))
             .clipShape(RoundedRectangle(cornerRadius: 13))
     }
 
     private func authField(_ placeholder: String, text: Binding<String>, icon: String, email: Bool = false) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon).foregroundStyle(Color(red: 0.42, green: 0.50, blue: 0.62))
+            Image(systemName: icon).foregroundStyle(SabayChatColors.textSecondary)
             TextField(placeholder, text: text)
                 .focused($focusedField, equals: email ? .email : .name)
                 .textContentType(email ? .emailAddress : .name)
@@ -172,8 +173,9 @@ struct WelcomeView: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 14)
-        .background(.white)
-        .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.black.opacity(0.08)))
+        .foregroundStyle(.white)
+        .background(SabayChatColors.surface)
+        .overlay(RoundedRectangle(cornerRadius: 13).stroke(.white.opacity(0.10)))
         .clipShape(RoundedRectangle(cornerRadius: 13))
     }
 
@@ -182,11 +184,11 @@ struct WelcomeView: View {
             HStack {
                 Text("STEP \(step) OF \(total)").font(.caption2.bold()).foregroundStyle(SabayChatColors.primary)
                 Spacer()
-                Text("\(step * 100 / total)% Complete").font(.caption2).foregroundStyle(Color.gray)
+                Text("\(step * 100 / total)% Complete").font(.caption2).foregroundStyle(SabayChatColors.textSecondary)
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(red: 0.86, green: 0.89, blue: 0.94))
+                    Capsule().fill(SabayChatColors.surface)
                     Capsule().fill(SabayChatColors.primary).frame(width: proxy.size.width * CGFloat(step) / CGFloat(total))
                 }
             }.frame(height: 5)
@@ -203,9 +205,9 @@ struct WelcomeView: View {
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 18)
-            .foregroundStyle(filled ? .white : Color(red: 0.10, green: 0.16, blue: 0.25))
-            .background(filled ? AnyShapeStyle(SabayChatColors.primary) : AnyShapeStyle(.white))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(filled ? 0 : 0.08)))
+            .foregroundStyle(.white)
+            .background(filled ? AnyShapeStyle(SabayChatColors.primary) : AnyShapeStyle(SabayChatColors.surface))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(filled ? 0 : 0.10)))
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(SabayPrimaryButtonStyle())
@@ -216,19 +218,19 @@ struct WelcomeView: View {
             Button {
                 showingCodeEntry = false
             } label: {
-                Image(systemName: "arrow.left").foregroundStyle(Color(red: 0.10, green: 0.16, blue: 0.25))
+                Image(systemName: "arrow.left").foregroundStyle(.white)
             }.buttonStyle(.plain)
-            Text("Your Identity").font(.system(size: 29, weight: .bold, design: .rounded)).foregroundStyle(Color(red: 0.08, green: 0.13, blue: 0.22))
+            Text("Your Identity").font(.system(size: 29, weight: .bold, design: .rounded)).foregroundStyle(.white)
             progressView(step: 2, total: 2)
-            Text("VERIFICATION CODE").font(.caption.bold()).foregroundStyle(Color(red: 0.40, green: 0.47, blue: 0.58))
+            Text("VERIFICATION CODE").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary)
             HStack(spacing: 8) {
                 ForEach(0..<6, id: \.self) { index in
                     Text(index < verificationCode.count ? String(Array(verificationCode)[index]) : "")
                         .font(.title2.bold())
-                        .foregroundStyle(Color(red: 0.08, green: 0.13, blue: 0.22))
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(.white)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(index == min(verificationCode.count, 5) ? SabayChatColors.primary : Color.black.opacity(0.08), lineWidth: 1.5))
+                        .background(SabayChatColors.surface)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(index == min(verificationCode.count, 5) ? SabayChatColors.primary : .white.opacity(0.10), lineWidth: 1.5))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
@@ -240,7 +242,7 @@ struct WelcomeView: View {
                 .onChange(of: verificationCode) { _, value in
                     verificationCode = String(value.filter(\.isNumber).prefix(6))
                 }
-            Text("A code was sent to \(email).").font(.subheadline).foregroundStyle(Color(red: 0.40, green: 0.47, blue: 0.58))
+            Text("A code was sent to \(email).").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary)
             if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(SabayChatColors.primary) }
             Button("Verify and continue") { verifyCode() }
                 .frame(maxWidth: .infinity)
