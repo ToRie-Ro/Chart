@@ -50,13 +50,26 @@ app.patch('/api/me', async (req, res) => {
   const userId = authenticatedUserId(req);
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const updates: Record<string, string> = {};
-  for (const [key, column] of [['name', 'name'], ['bio', 'bio'], ['avatarUrl', 'avatar_url']] as const) {
+  for (const [key, column] of [['name', 'name'], ['bio', 'bio'], ['avatarUrl', 'avatar_url'], ['phoneNumber', 'phone_number']] as const) {
     if (typeof req.body?.[key] === 'string') updates[column] = req.body[key].trim();
   }
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No profile changes supplied.' });
   const { data, error } = await supabase.from('users').update(updates).eq('id', userId).select('*').single();
   if (error || !data) return res.status(500).json({ error: 'Could not update profile.' });
   return res.json({ user: publicUser(data) });
+});
+
+app.post('/api/me/password', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  const currentPassword = String(req.body?.currentPassword ?? '');
+  const newPassword = String(req.body?.newPassword ?? '');
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  const { data, error } = await supabase.from('users').select('password_hash').eq('id', userId).single();
+  if (error || !data || !(await bcrypt.compare(currentPassword, data.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
+  const { error: updateError } = await supabase.from('users').update({ password_hash: await bcrypt.hash(newPassword, 12) }).eq('id', userId);
+  if (updateError) return res.status(500).json({ error: 'Could not change password.' });
+  return res.json({ status: 'password_changed' });
 });
 
 app.get('/api/premium/features', (_req, res) => {

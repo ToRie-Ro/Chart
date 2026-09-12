@@ -20,28 +20,30 @@ struct ChatListView: View {
             ZStack {
                 SabayChatColors.background.ignoresSafeArea()
                 VStack(spacing: 0) {
-                    HStack {
-                        Text("SabayChart").font(.title2.bold()).foregroundStyle(.white)
-                        Spacer()
-                        Text("KH").font(.caption.bold()).foregroundStyle(.white).padding(7).background(SabayChatColors.primary).clipShape(Circle())
-                        Image(systemName: "bell").foregroundStyle(.white)
-                        Button { showProfile = true } label: { Image(systemName: "person.crop.circle.fill").foregroundStyle(.white) }
-                    }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
-                    HStack(spacing: 8) {
-                        Text("All Chats").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.primary).clipShape(Capsule())
-                        Text("Personal").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.surface).clipShape(Capsule())
-                        Text("Groups").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.surface).clipShape(Capsule())
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 12)
-                    HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary); TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary) }.padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20).padding(.bottom, 8)
-                    if selectedTab != "Chats" { UtilityView(title: selectedTab) }
-                    else if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
-                    else if !error.isEmpty { state(title: "Could not load chats", detail: error) }
-                    else if filtered.isEmpty { state(title: "No chats yet", detail: "Start a conversation to see it here.") }
-                    else { ScrollView { LazyVStack(spacing: 0) { ForEach(filtered) { item in Button { selected = item } label: { row(item) }.buttonStyle(.plain) } } }.refreshable { await load() } }
+                    if selectedTab == "Chats" {
+                        HStack {
+                            Text("SabayChart").font(.title2.bold()).foregroundStyle(.white)
+                            Spacer()
+                            Image(systemName: "bell").foregroundStyle(.white)
+                            Button { showProfile = true } label: { Image(systemName: "person.crop.circle.fill").foregroundStyle(.white) }
+                        }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
+                        HStack(spacing: 8) {
+                            Text("All Chats").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.primary).clipShape(Capsule())
+                            Text("Personal").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.surface).clipShape(Capsule())
+                            Text("Groups").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.surface).clipShape(Capsule())
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 12)
+                        HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary); TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary) }.padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20).padding(.bottom, 8)
+                        if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
+                        else if !error.isEmpty { state(title: "Could not load chats", detail: error) }
+                        else if filtered.isEmpty { state(title: "No chats yet", detail: "Start a conversation to see it here.") }
+                        else { ScrollView { LazyVStack(spacing: 0) { ForEach(filtered) { item in Button { selected = item } label: { row(item) }.buttonStyle(.plain) } } }.refreshable { await load() } }
+                    } else {
+                        UtilityView(title: selectedTab)
+                    }
                     HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
             }.task { await load(); connectPresence() }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
-                .sheet(isPresented: $showProfile) { ProfileView() }
+                .fullScreenCover(isPresented: $showProfile) { ProfileView() }
         }.preferredColorScheme(.dark)
     }
 
@@ -60,12 +62,23 @@ struct ChatListView: View {
 
 private struct UtilityView: View {
     let title: String
+    @State private var friendEmail = ""
+    @State private var email = ""
+    @State private var phone = ""
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var notice = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
-            if title == "Contacts" { Text("People you can chat with").foregroundStyle(SabayChatColors.textSecondary); Label("Da Rea", systemImage: "person.crop.circle.fill"); Label("Sokha Mean", systemImage: "person.crop.circle.fill") }
+            if title == "Contacts" {
+                Text("People you can chat with").foregroundStyle(SabayChatColors.textSecondary)
+                HStack { TextField("Friend email", text: $friendEmail).textInputAutocapitalization(.never).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button { notice = friendEmail.isEmpty ? "Enter an email address." : "Friend request sent."; friendEmail = "" } label: { Image(systemName: "plus").foregroundStyle(.white).padding(12).background(SabayChatColors.primary).clipShape(Circle()) } }
+                Label("Da Rea", systemImage: "person.crop.circle.fill"); Label("Sokha Mean", systemImage: "person.crop.circle.fill")
+            }
             else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
-            else { Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
+            else { Text("Account").font(.headline); TextField("Email address", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); TextField("Phone number", text: $phone).keyboardType(.phonePad).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("Current password", text: $currentPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("New password", text: $newPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button("Save account changes") { notice = "Settings saved on this device." }.buttonStyle(.borderedProminent); Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
+            if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             Spacer()
         }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading)
     }

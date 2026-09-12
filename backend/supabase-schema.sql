@@ -9,6 +9,7 @@ create table if not exists public.users (
   role text not null default 'user',
   plan text not null default 'free',
   avatar_url text,
+  phone_number text,
   is_online boolean not null default false,
   last_seen timestamptz not null default now(),
   created_at timestamptz not null default now()
