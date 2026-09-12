@@ -69,7 +69,6 @@ private struct UtilityView: View {
     @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var notice = ""
-    @State private var licenseKey = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
@@ -82,8 +81,8 @@ private struct UtilityView: View {
             else {
                 NavigationLink { ProfileView() } label: { settingRow("person.crop.circle", "Profile details", "Name, email, and account") }
                 NavigationLink { SettingsDetailView(title: "FAQ", detail: "Find answers about accounts, chats, and safety.") } label: { settingRow("questionmark.circle", "FAQ", "Help center") }
-                NavigationLink { SettingsDetailView(title: "Premium SabayChart", detail: "HD calls, custom themes, badges, and larger uploads.") } label: { settingRow("crown", "Premium SabayChart", "Unlock more features") }
-                NavigationLink { SettingsDetailView(title: "Buy Premium", detail: "Premium payments will be available soon.") } label: { settingRow("creditcard", "Buy Premium", "Upgrade your account") }
+                NavigationLink { PremiumView() } label: { settingRow("crown.fill", "Premium SabayChart", "Unlock more features") }
+                NavigationLink { PremiumView() } label: { settingRow("creditcard.fill", "Buy Premium", "Activate with a license key") }
                 NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
                 NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control your sessions and account security.") } label: { settingRow("lock.shield", "Privacy and security", "Password and device access") }
                 NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell", "Notifications and sounds", "Messages and calls") }
@@ -107,6 +106,73 @@ private struct SettingsDetailView: View {
     let title: String
     let detail: String
     var body: some View { ZStack { SabayChatColors.background.ignoresSafeArea(); VStack(alignment: .leading, spacing: 16) { Text(title).font(.largeTitle.bold()).foregroundStyle(.white); Text(detail).foregroundStyle(SabayChatColors.textSecondary); Spacer() }.padding(24) }.preferredColorScheme(.dark) }
+}
+
+private struct PremiumView: View {
+    @State private var licenseKey = ""
+    @State private var status = ""
+    @State private var isActivating = false
+
+    var body: some View {
+        ZStack {
+            SabayChatColors.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Image(systemName: "crown.fill").font(.system(size: 36)).foregroundStyle(.yellow)
+                        Text("Premium SabayChart").font(.largeTitle.bold()).foregroundStyle(.white)
+                        Text("Make every conversation feel more personal.").foregroundStyle(SabayChatColors.textSecondary)
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Included with Premium").font(.headline).foregroundStyle(.white)
+                        premiumFeature("phone.and.waveform", "HD voice and video calls")
+                        premiumFeature("paintbrush.pointed", "Custom themes and profile badges")
+                        premiumFeature("arrow.up.doc", "Larger file uploads")
+                        premiumFeature("clock.arrow.circlepath", "Message editing and history")
+                        premiumFeature("person.crop.circle.badge.checkmark", "Priority support")
+                    }.padding(18).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 18))
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Have a license key?").font(.headline).foregroundStyle(.white)
+                        TextField("PREMIUM-XXXX-XXXX", text: $licenseKey)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .padding(14).background(SabayChatColors.background).clipShape(RoundedRectangle(cornerRadius: 12))
+                        Button {
+                            Task { await activate() }
+                        } label: {
+                            HStack { Spacer(); if isActivating { ProgressView().tint(.white) } else { Image(systemName: "checkmark.seal.fill"); Text("Activate Premium") }; Spacer() }
+                        }.buttonStyle(.borderedProminent).tint(SabayChatColors.primary).disabled(isActivating)
+                        if !status.isEmpty { Text(status).font(.footnote).foregroundStyle(status == "Premium activated." ? SabayChatColors.success : .red) }
+                    }.padding(18).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 18))
+                }.padding(20)
+            }
+        }.scrollDismissesKeyboard(.interactively).preferredColorScheme(.dark).navigationTitle("Premium").navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func premiumFeature(_ icon: String, _ text: String) -> some View {
+        Label(text, systemImage: icon).foregroundStyle(.white)
+    }
+
+    private func activate() async {
+        let value = licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { status = "Enter your license key."; return }
+        guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/premium/activate") else { status = "Please log in again."; return }
+        isActivating = true
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["licenseKey": value])
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let serverError = try? JSONDecoder().decode(ServerError.self, from: data)
+            status = (200..<300).contains(code) ? "Premium activated." : (serverError?.error ?? "License could not be activated.")
+        } catch { status = "Could not connect to SabayChart." }
+        isActivating = false
+    }
+
+    private struct ServerError: Decodable { let error: String }
 }
 
 private struct ProfileView: View {
