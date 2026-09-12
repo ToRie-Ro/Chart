@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONArray
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,13 +95,56 @@ fun WelcomeScreen(onAuthenticated: () -> Unit) {
 
 @Composable
 private fun ChatScreen() {
+    var chats by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        try {
+            chats = loadConversations()
+            if (chats.isEmpty()) error = "No conversations yet."
+        } catch (_: Exception) {
+            error = "Cannot connect to the server."
+        } finally {
+            loading = false
+        }
+    }
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
         Text("SabayChart", style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(16.dp))
-        Text("Your chats will appear here.")
+        Text("All Chats", color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(12.dp))
+        if (loading) {
+            Text("Loading your chats...")
+        } else if (error.isNotEmpty()) {
+            Text(error)
+        } else {
+            chats.forEach { (name, message) ->
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                    Text(name, style = MaterialTheme.typography.titleMedium)
+                    Text(message, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+private fun loadConversations(): List<Pair<String, String>> {
+    val connection = URL("https://chart-ztyk.onrender.com/api/conversations").openConnection() as HttpURLConnection
+    return try {
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+        if (connection.responseCode !in 200..299) throw IllegalStateException()
+        val json = connection.inputStream.bufferedReader().use { it.readText() }
+        val array = JSONArray(json)
+        List(array.length()) { index ->
+            val item = array.getJSONObject(index)
+            val lastMessage = item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet"
+            item.optString("name", "Conversation") to lastMessage
+        }
+    } finally {
+        connection.disconnect()
     }
 }
 
