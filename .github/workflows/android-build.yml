@@ -28,15 +28,15 @@ jobs:
 
       - name: Install Gradle runtime
         run: |
-          curl -L https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle-8.7-bin.zip
-          unzip -o /tmp/gradle-8.7-bin.zip -d /tmp
-          echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
+          curl -L https://services.gradle.org/distributions/gradle-8.13-bin.zip -o /tmp/gradle-8.13-bin.zip
+          unzip -o /tmp/gradle-8.13-bin.zip -d /tmp
+          echo "/tmp/gradle-8.13/bin" >> $GITHUB_PATH
 
       - name: Generate Gradle wrapper if missing
         working-directory: android/SabayChat-Android
         run: |
           if [ ! -f gradlew ]; then
-            /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+            /tmp/gradle-8.13/bin/gradle wrapper --gradle-version 8.13
           fi
           chmod +x ./gradlew
 
@@ -60,7 +60,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SabayChat-release.apk
-          path: android/SabayChat-Android/app/build/outputs/apk/release/app-release.apk
+          path: android/SabayChat-Android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

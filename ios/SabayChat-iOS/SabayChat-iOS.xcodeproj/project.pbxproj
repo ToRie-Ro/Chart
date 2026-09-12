@@ -1,0 +1,63 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* SabayChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* SabayChatApp.swift */; };
+		A10000000000000000000002 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* WelcomeView.swift */; };
+		A10000000000000000000003 /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* ChatListView.swift */; };
+		A10000000000000000000004 /* SabayChatColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* SabayChatColors.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B10000000000000000000001 /* SabayChatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/SabayChatApp.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Authentication/WelcomeView.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Chats/ChatListView.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* SabayChatColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/DesignSystem/SabayChatColors.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* SabayChat-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SabayChat-iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C10000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D10000000000000000000001 = {isa = PBXGroup; children = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004, D10000000000000000000007, ); sourceTree = "<group>"; };
+		D10000000000000000000002 /* App */ = {isa = PBXGroup; children = (B10000000000000000000001, ); path = App; sourceTree = "<group>"; };
+		D10000000000000000000003 /* Features */ = {isa = PBXGroup; children = (B10000000000000000000002, B10000000000000000000003, ); path = Features; sourceTree = "<group>"; };
+		D10000000000000000000004 /* Core */ = {isa = PBXGroup; children = (B10000000000000000000004, ); path = Core; sourceTree = "<group>"; };
+		D10000000000000000000005 /* Authentication and Chats */ = {isa = PBXGroup; children = (B10000000000000000000002, B10000000000000000000003, ); path = Features; sourceTree = "<group>"; };
+		D10000000000000000000006 /* DesignSystem */ = {isa = PBXGroup; children = (B10000000000000000000004, ); path = Core; sourceTree = "<group>"; };
+		D10000000000000000000007 /* Products */ = {isa = PBXGroup; children = (B10000000000000000000005, ); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E10000000000000000000001 /* SabayChat-iOS */ = {isa = PBXNativeTarget; buildConfigurationList = F10000000000000000000002; buildPhases = (C10000000000000000000002, C10000000000000000000001, ); buildRules = ( ); dependencies = ( ); name = "SabayChat-iOS"; productName = "SabayChat-iOS"; productReference = B10000000000000000000005; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E10000000000000000000002 /* Project object */ = {isa = PBXProject; attributes = { LastUpgradeCheck = 1540; ORGANIZATIONNAME = SabayChat; TargetAttributes = { E10000000000000000000001 = { CreatedOnToolsVersion = 15.4; }; }; }; buildConfigurationList = F10000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = ( en, Base, ); mainGroup = D10000000000000000000001; productRefGroup = D10000000000000000000007; projectDirPath = ""; projectRoot = ""; targets = ( E10000000000000000000001, ); };
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C10000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F20000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		F20000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+		F20000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychat.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		F20000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychat.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F10000000000000000000001 /* Project configuration list */ = {isa = XCConfigurationList; buildConfigurations = ( F20000000000000000000001, F20000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F10000000000000000000002 /* Target configuration list */ = {isa = XCConfigurationList; buildConfigurations = ( F20000000000000000000003, F20000000000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = E10000000000000000000002;
+}
