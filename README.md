@@ -64,6 +64,15 @@ Render's filesystem and process memory are not permanent, so the current demo ac
 
 Supabase stores the data; Render continues hosting the Node.js API. Do not put the database password in Git or in the mobile apps.
 
+This repository uses Express, not Next.js. Do not add `page.tsx`, `next/headers`, or Next.js middleware. The backend Supabase client is in `backend/src/config/supabase.ts`, and the starter SQL schema is `backend/supabase-schema.sql`. Run that SQL in Supabase, then add these Render variables:
+
+```text
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+```
+
+The service-role key must only exist in Render environment variables. Never use it in iOS, Android, browser code, or Git.
+
 ## Product goals
 
 - Shared backend and accounts across platforms
