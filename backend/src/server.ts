@@ -301,7 +301,12 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'Name, email, and a password of at least 6 characters are required.' });
   }
 
-  void register(name, normalizedEmail, password).then((result) => res.status(result.status).json(result.body));
+  void register(name, normalizedEmail, password)
+    .then((result) => res.status(result.status).json(result.body))
+    .catch((error) => {
+      console.error('Registration failed:', error instanceof Error ? error.message : 'unknown error');
+      return res.status(500).json({ error: 'Could not complete registration.' });
+    });
 });
 
 async function login(email: string, password: string) {
@@ -381,7 +386,10 @@ async function createSession(userId: string, deviceName: string, platform: strin
     platform,
     refresh_token_hash: hashToken(refreshToken),
   }).select('id').single();
-  if (error || !data) throw new Error('Could not create device session.');
+  if (error || !data) {
+    console.error('Device session insert failed:', error?.message ?? 'No session returned.');
+    throw new Error('Could not create device session.');
+  }
   const accessToken = jwt.sign({ sub: userId, sid: data.id }, env.jwtSecret, { expiresIn: '15m', issuer: env.appName });
   return { token: accessToken, accessToken, refreshToken, expiresIn: 900 };
 }

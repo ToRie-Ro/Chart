@@ -77,6 +77,20 @@ The service-role key must only exist in Render environment variables. Never use 
 
 If the original schema was already run, run `backend/supabase-migration-002-conversation-ids.sql` after the main schema. This keeps the existing `conv_1` and `conv_2` app IDs compatible with saved messages. Mobile clients send messages to the API with their login JWT; messages are stored in Supabase and loaded again when the chat opens.
 
+### Email verification login
+
+Password login sends a six-digit code by email before creating a device session. In Render, add all of these environment variables and redeploy:
+
+```text
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=your-brevo-login-email
+SMTP_PASSWORD=your-brevo-smtp-key
+EMAIL_FROM=SabayChat <no-reply@your-verified-domain.com>
+```
+
+The sender address or domain must be verified in Brevo. `SMTP_PASSWORD` is the Brevo SMTP key, not the Brevo account password. If these variables are missing, login intentionally returns `Email delivery is not configured.` Registration does not require SMTP, but it does require that the Supabase schema or migration above has created `device_sessions` with the `refresh_token_hash` column.
+
 After running the SQL, the API uses Supabase for registration and login. Access tokens are short-lived (15 minutes). Store the returned refresh token only in platform secure storage and rotate it through `POST /api/auth/refresh`; never put either token in logs or URLs. Test the protected profile endpoint with the access token returned by login:
 
 ```text
