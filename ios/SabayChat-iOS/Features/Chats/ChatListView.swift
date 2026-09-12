@@ -1,4 +1,5 @@
 import SwiftUI
+import Security
 
 struct ChatListView: View {
     let onSignOut: () -> Void
@@ -86,7 +87,7 @@ struct ChatListView: View {
                             }.refreshable { await load() }
                         }
                     } else {
-                        UtilityView(title: selectedTab)
+                        UtilityView(title: selectedTab, onSignOut: onSignOut)
                     }
                 }
                 if selectedTab == "Chats" {
@@ -138,6 +139,7 @@ struct ChatListView: View {
 
 private struct UtilityView: View {
     let title: String
+    let onSignOut: () -> Void
     @State private var friendEmail = ""
     @State private var email = ""
     @State private var phone = ""
@@ -145,6 +147,7 @@ private struct UtilityView: View {
     @State private var newPassword = ""
     @State private var notice = ""
     @State private var contacts: [Contact] = []
+    @State private var showSignOutConfirmation = false
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if title == "Settings" {
@@ -152,9 +155,10 @@ private struct UtilityView: View {
                 settingGroup(title: "Account") {
                     NavigationLink { ProfileView() } label: { settingRow("person.crop.circle.fill", "My profile", "Name, email, and account") }
                     NavigationLink { ProfileView() } label: { settingRow("iphone.and.arrow.forward", "Devices", "Manage active sessions") }
+                    Button { showSignOutConfirmation = true } label: { settingRow("rectangle.portrait.and.arrow.right", "Log out", "End this device session") }
                 }
                 settingGroup(title: "Preferences") {
-                    NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell.fill", "Notifications and sounds", "Messages and calls") }
+                    NavigationLink { NotificationSettingsView() } label: { settingRow("bell.fill", "Notifications and sounds", "Messages and calls") }
                     NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
                 }
                 settingGroup(title: "SabayChart") {
@@ -188,7 +192,17 @@ private struct UtilityView: View {
             }
             if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             Spacer()
-        }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading).task { if title == "Contacts" { await loadContacts() } }
+        }
+        .foregroundStyle(.white)
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { if title == "Contacts" { await loadContacts() } }
+        .confirmationDialog("Log out of SabayChart?", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+            Button("Log out", role: .destructive) { logoutCurrentDevice(); onSignOut() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You can sign in again at any time.")
+        }
     }
 
     private var settingsHeader: some View {
@@ -216,7 +230,21 @@ private struct UtilityView: View {
     private func loadContacts() async { guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/contacts") else { return }; var request = URLRequest(url: url); request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); guard let (data, _) = try? await URLSession.shared.data(for: request) else { return }; contacts = (try? JSONDecoder().decode([Contact].self, from: data)) ?? [] }
     private func addFriend() async { let email = friendEmail.trimmingCharacters(in: .whitespacesAndNewlines); guard !email.isEmpty, let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/contacts/requests") else { notice = "Enter an email address."; return }; var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try? JSONSerialization.data(withJSONObject: ["email": email]); do { let (_, response) = try await URLSession.shared.data(for: request); notice = (response as? HTTPURLResponse)?.statusCode == 201 ? "Friend request sent." : "Could not send request." } catch { notice = "Could not connect to SabayChart." }; friendEmail = "" }
 
+    private func logoutCurrentDevice() {
+        guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/auth/logout") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("******", forHTTPHeaderField: "Authorization")
+        URLSession.shared.dataTask(with: request).resume()
+        deleteKeychainToken()
+    }
+
     private struct Contact: Identifiable, Decodable { let id: String; let name: String; let isOnline: Bool; enum CodingKeys: String, CodingKey { case id, name; case isOnline = "isOnline" } }
+}
+
+private func deleteKeychainToken() {
+    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: "sabaychart.authToken"]
+    SecItemDelete(query as CFDictionary)
 }
 
 private struct NotificationCenterView: View {
@@ -314,6 +342,64 @@ private struct SettingsDetailView: View {
     var body: some View { ZStack { SabayChatColors.background.ignoresSafeArea(); VStack(alignment: .leading, spacing: 16) { Text(title).font(.largeTitle.bold()).foregroundStyle(.white); Text(detail).foregroundStyle(SabayChatColors.textSecondary); Spacer() }.padding(24) }.preferredColorScheme(.dark) }
 }
 
+private struct NotificationSettingsView: View {
+    @State private var notificationsEnabled = true
+    @State private var soundsEnabled = true
+    @State private var darkMode = true
+    @State private var status = ""
+
+    var body: some View {
+        ZStack {
+            SabayChatBackground()
+            VStack(spacing: 12) {
+                preferenceRow("bell.fill", "Notifications", "Message and friend request alerts", $notificationsEnabled)
+                preferenceRow("speaker.wave.2.fill", "Sounds", "Play notification sounds", $soundsEnabled)
+                preferenceRow("moon.fill", "Dark appearance", "Use SabayChart dark mode", $darkMode)
+                if !status.isEmpty { Text(status).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
+                Spacer()
+            }.padding(20)
+        }
+        .navigationTitle("Notifications and sounds")
+        .task { await load() }
+        .onChange(of: notificationsEnabled) { _, _ in save() }
+        .onChange(of: soundsEnabled) { _, _ in save() }
+        .onChange(of: darkMode) { _, _ in save() }
+        .preferredColorScheme(.dark)
+    }
+
+    private func preferenceRow(_ icon: String, _ title: String, _ detail: String, _ value: Binding<Bool>) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).foregroundStyle(SabayChatColors.primary).frame(width: 40, height: 40).background(SabayChatColors.primary.opacity(0.14)).clipShape(Circle())
+            VStack(alignment: .leading, spacing: 3) { Text(title).font(.headline).foregroundStyle(.white); Text(detail).font(.caption).foregroundStyle(SabayChatColors.textSecondary) }
+            Spacer()
+            Toggle("", isOn: value).labelsHidden().tint(SabayChatColors.primary)
+        }.padding(15).sabayGlass(cornerRadius: 18)
+    }
+
+    private func load() async {
+        guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/settings") else { return }
+        var request = URLRequest(url: url)
+        request.setValue("******", forHTTPHeaderField: "Authorization")
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        notificationsEnabled = decoded["notifications_enabled"] as? Bool ?? true
+        soundsEnabled = decoded["sounds_enabled"] as? Bool ?? true
+        darkMode = decoded["dark_mode"] as? Bool ?? true
+    }
+
+    private func save() {
+        guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/settings") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("******", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["notificationsEnabled": notificationsEnabled, "soundsEnabled": soundsEnabled, "darkMode": darkMode])
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            DispatchQueue.main.async { status = (response as? HTTPURLResponse)?.statusCode == 200 ? "Preferences saved." : "Could not save preferences." }
+        }.resume()
+    }
+}
+
 private struct PremiumView: View {
     @State private var licenseKey = ""
     @State private var status = ""
@@ -384,6 +470,9 @@ private struct PremiumView: View {
 private struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var devices: [String] = []
+    @State private var showEditProfile = false
+    @State private var showLogoutAll = false
+    @State private var notice = ""
     var body: some View {
         NavigationStack {
             ZStack {
@@ -399,11 +488,28 @@ private struct ProfileView: View {
                     Text("Devices").font(.headline).foregroundStyle(.white).padding(.top, 12)
                     if devices.isEmpty { Text("Loading device activity...").foregroundStyle(SabayChatColors.textSecondary) }
                     else { ForEach(devices, id: \.self) { Label($0, systemImage: "iphone") } }
+                    Button { showLogoutAll = true } label: {
+                        Label("Log out all other devices", systemImage: "rectangle.portrait.and.arrow.right")
+                            .foregroundStyle(.red)
+                    }
+                    if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
                     Text("Premium coming soon").font(.headline).foregroundStyle(.white).padding(.top, 12)
                     Text("HD calls, custom themes, larger uploads, and priority support.").foregroundStyle(SabayChatColors.textSecondary)
                     Spacer()
                 }.padding(24)
-            }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) } }.task { await loadDevices() }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Edit") { showEditProfile = true }.foregroundStyle(SabayChatColors.primary) }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) }
+            }
+            .sheet(isPresented: $showEditProfile) { ProfileEditView() }
+            .confirmationDialog("End other sessions?", isPresented: $showLogoutAll, titleVisibility: .visible) {
+                Button("Log out other devices", role: .destructive) { Task { await logoutAllDevices() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This keeps your current device signed in.")
+            }
+            .task { await loadDevices() }
         }.preferredColorScheme(.dark)
     }
 
@@ -415,11 +521,82 @@ private struct ProfileView: View {
         devices = response.devices.map { "\($0.deviceName) (\($0.platform))" }
     }
 
+    private func logoutAllDevices() async {
+        guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/me/devices/logout-all") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("******", forHTTPHeaderField: "Authorization")
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            notice = (response as? HTTPURLResponse)?.statusCode == 204 ? "Other device sessions ended." : "Could not end other sessions."
+            if notice.hasPrefix("Other") { await loadDevices() }
+        } catch {
+            notice = "Could not connect to SabayChart."
+        }
+    }
+
     private struct DeviceResponse: Decodable { let devices: [Device] }
     private struct Device: Decodable {
         let deviceName: String
         let platform: String
         enum CodingKeys: String, CodingKey { case deviceName = "device_name"; case platform }
+    }
+
+    private struct ProfileEditView: View {
+        @Environment(\.dismiss) private var dismiss
+        @State private var name: String
+        @State private var bio = ""
+        @State private var status = ""
+        @State private var isSaving = false
+
+        init() {
+            _name = State(initialValue: UserDefaults.standard.string(forKey: "profileName") ?? "")
+        }
+
+        var body: some View {
+            NavigationStack {
+                ZStack {
+                    SabayChatBackground()
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Profile details").font(.title.bold()).foregroundStyle(.white)
+                        TextField("Display name", text: $name).textInputAutocapitalization(.words).padding(14).sabayGlass(cornerRadius: 15)
+                        TextField("Short bio", text: $bio, axis: .vertical).lineLimit(3...5).padding(14).sabayGlass(cornerRadius: 15)
+                        if !status.isEmpty { Text(status).font(.footnote).foregroundStyle(status == "Profile saved." ? SabayChatColors.success : .red) }
+                        Button { Task { await save() } } label: {
+                            HStack { Spacer(); if isSaving { ProgressView().tint(.white) } else { Text("Save changes") }; Spacer() }
+                        }.buttonStyle(.borderedProminent).tint(SabayChatColors.primary).disabled(isSaving)
+                        Spacer()
+                    }.padding(24)
+                }
+                .navigationTitle("Edit profile")
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } } }
+            }
+            .preferredColorScheme(.dark)
+        }
+
+        private func save() async {
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedName.isEmpty else { status = "Enter a display name."; return }
+            guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/me") else { status = "Please log in again."; return }
+            isSaving = true
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("******", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try? JSONSerialization.data(withJSONObject: ["name": trimmedName, "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines)])
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if (response as? HTTPURLResponse)?.statusCode == 200 {
+                    UserDefaults.standard.set(trimmedName, forKey: "profileName")
+                    status = "Profile saved."
+                } else {
+                    status = "Could not save profile."
+                }
+            } catch {
+                status = "Could not connect to SabayChart."
+            }
+            isSaving = false
+        }
     }
 }
 
