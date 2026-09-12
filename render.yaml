@@ -12,5 +12,7 @@ services:
         value: production
       - key: API_BASE_URL
         value: https://chart-ztyk.onrender.com
+      - key: SUPABASE_URL
+        value: https://xjvjmmgujnwwpfmacdjb.supabase.co
       - key: JWT_SECRET
         generateValue: true
