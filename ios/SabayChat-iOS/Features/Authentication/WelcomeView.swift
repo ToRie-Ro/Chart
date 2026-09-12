@@ -1,19 +1,35 @@
 import SwiftUI
 
 struct WelcomeView: View {
+    @FocusState private var focusedField: Field?
     @State private var mode: AuthMode = .login
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
     @State private var message = ""
     @State private var isLoading = false
+    @State private var isAuthenticated = UserDefaults.standard.bool(forKey: "isAuthenticated")
 
     private enum AuthMode {
         case login
         case register
     }
 
+    private enum Field: Hashable {
+        case name, email, password
+    }
+
     var body: some View {
+        Group {
+            if isAuthenticated {
+                ChatListView()
+            } else {
+                authenticationView
+            }
+        }
+    }
+
+    private var authenticationView: some View {
         ZStack {
             LinearGradient(
                 colors: [SabayChatColors.primary, SabayChatColors.primaryDark],
@@ -22,7 +38,8 @@ struct WelcomeView: View {
             )
             .ignoresSafeArea()
 
-            VStack(alignment: .center, spacing: 20) {
+            ScrollView {
+                VStack(alignment: .center, spacing: 20) {
                 Spacer(minLength: 24)
 
                 VStack(spacing: 12) {
@@ -57,6 +74,7 @@ struct WelcomeView: View {
 
                     if mode == .register {
                         TextField("Name", text: $name)
+                            .focused($focusedField, equals: .name)
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
                             .padding()
@@ -65,6 +83,7 @@ struct WelcomeView: View {
                     }
 
                     TextField("Email", text: $email)
+                        .focused($focusedField, equals: .email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -74,6 +93,7 @@ struct WelcomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
 
                     SecureField("Password", text: $password)
+                        .focused($focusedField, equals: .password)
                         .textContentType(mode == .login ? .password : .newPassword)
                         .padding()
                         .background(.white.opacity(0.12))
@@ -119,8 +139,17 @@ struct WelcomeView: View {
                 )
 
                 Spacer(minLength: 20)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 32)
             }
-            .padding(.horizontal, 24)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
+            }
         }
     }
 
@@ -131,6 +160,7 @@ struct WelcomeView: View {
         }
 
         isLoading = true
+        focusedField = nil
         message = ""
         let endpoint = mode == .login ? "auth/login" : "auth/register"
         guard let url = URL(string: "https://chart-ztyk.onrender.com/api/\(endpoint)") else { return }
@@ -148,6 +178,8 @@ struct WelcomeView: View {
                 isLoading = false
                 if (200..<300).contains(statusCode) {
                     message = mode == .login ? "Login successful." : "Account created successfully."
+                    UserDefaults.standard.set(true, forKey: "isAuthenticated")
+                    isAuthenticated = true
                 } else {
                     message = serverMessage ?? "The server could not complete your request."
                 }
