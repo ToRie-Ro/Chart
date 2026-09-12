@@ -53,6 +53,8 @@ APP_ENV=production
 JWT_SECRET=your-secure-secret
 ```
 
+For Render, add `JWT_SECRET` under **Dashboard > your service > Environment**. Generate it locally with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` and paste the result into Render, or recreate/sync the service from [render.yaml](./render.yaml), which requests a generated secret. Do not put the generated value in GitHub. A deploy will intentionally stop if production starts without this variable.
+
 ## Free persistent account storage
 
 Render's filesystem and process memory are not permanent, so the current demo accounts reset when the service restarts. Use a free Supabase PostgreSQL project for persistent users, passwords, conversations, and messages:

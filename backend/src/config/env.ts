@@ -5,8 +5,12 @@ dotenv.config();
 const environment = (process.env.APP_ENV ?? 'development') as 'development' | 'staging' | 'production';
 const jwtSecret = process.env.JWT_SECRET ?? (environment === 'production' ? '' : 'local-development-secret-change-me-32');
 
-if (jwtSecret.length < 32 || (environment === 'production' && !process.env.JWT_SECRET)) {
-  throw new Error('JWT_SECRET must be a configured value of at least 32 characters.');
+if (environment === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET is missing. Add a 32+ character secret in Render Environment Variables.');
+}
+
+if (jwtSecret.length < 32) {
+  throw new Error('JWT_SECRET must be at least 32 characters long.');
 }
 
 export const env = {
