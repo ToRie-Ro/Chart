@@ -1,171 +1,145 @@
 package com.sabaychat.android
 
 import android.os.Bundle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
-import org.json.JSONArray
+
+private const val API_BASE_URL = "https://chart-ztyk.onrender.com"
+private val Navy = Color(0xFF091326)
+private val Blue = Color(0xFF176BFF)
+private val Muted = Color(0xFF8490A5)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            var showChat by remember { mutableStateOf(false) }
-            SabayChatTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    if (showChat) {
-                        ChatScreen()
-                    } else {
-                        WelcomeScreen(onAuthenticated = { showChat = true })
-                    }
-                }
-            }
-        }
+        setContent { SabayChatTheme { Surface(Modifier.fillMaxSize(), color = Navy) { AppRoot() } } }
     }
 }
 
 @Composable
-fun WelcomeScreen(onAuthenticated: () -> Unit) {
-    var registerMode by remember { mutableStateOf(false) }
+private fun AppRoot() {
+    var authenticated by remember { mutableStateOf(false) }
+    var profile by remember { mutableStateOf(UserProfile("Da Rea", "darea@sabaychat.app")) }
+    if (authenticated) ChatHome(profile, onLogout = { authenticated = false })
+    else AuthScreen { user -> profile = user; authenticated = true }
+}
+
+@Composable
+private fun AuthScreen(onAuthenticated: (UserProfile) -> Unit) {
+    var register by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val keyboard = LocalSoftwareKeyboardController.current
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("SabayChart", fontSize = 32.sp, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(24.dp))
-        if (registerMode) {
-            OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(12.dp))
+    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Blue, Color(0xFF102D7A)))).padding(24.dp), verticalArrangement = Arrangement.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text("SabayChart", color = Color.White, fontSize = 34.sp, style = MaterialTheme.typography.headlineLarge)
+            Text("Connect with friends across Cambodia", color = Color.White.copy(alpha = .75f))
         }
-        OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = {
-                loading = true
-                status = ""
+        Spacer(Modifier.height(32.dp))
+        Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = .1f), RoundedCornerShape(24.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (register) "Create account" else "Welcome back", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            if (register) Field(name, { name = it }, "Name", KeyboardType.Text, ImeAction.Next)
+            Field(email, { email = it }, "Email", KeyboardType.Email, ImeAction.Next)
+            Field(password, { password = it }, "Password", KeyboardType.Password, ImeAction.Done, true, keyboard)
+            if (status.isNotEmpty()) Text(status, color = Color.White.copy(alpha = .9f))
+            Button(enabled = !loading, onClick = {
+                keyboard?.hide(); loading = true; status = ""
                 scope.launch {
-                    val result = authenticate(registerMode, name, email, password)
+                    val result = authenticate(register, name, email, password)
                     loading = false
-                    if (result == null) onAuthenticated() else status = result
+                    if (result.second == null) onAuthenticated(result.first!!) else status = result.second!!
                 }
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (loading) "Please wait..." else if (registerMode) "Create account" else "Login") }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { registerMode = !registerMode; status = "" }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (registerMode) "Back to login" else "Create account")
+            }, modifier = Modifier.fillMaxWidth()) { if (loading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White) else Text(if (register) "Create account" else "Login") }
+            TextButton(onClick = { register = !register; status = "" }, modifier = Modifier.fillMaxWidth()) { Text(if (register) "Back to login" else "Create account", color = Color.White) }
         }
-        if (status.isNotEmpty()) Text(status, modifier = Modifier.padding(top = 12.dp))
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun Field(value: String, onValue: (String) -> Unit, label: String, type: KeyboardType, action: ImeAction, password: Boolean = false, keyboard: androidx.compose.ui.platform.SoftwareKeyboardController? = null) {
+    OutlinedTextField(value, onValue, label = { Text(label) }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = type, imeAction = action), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { keyboard?.hide() }), visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
-private fun ChatScreen() {
-    var chats by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
+    var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
+    var search by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        try {
-            chats = loadConversations()
-            if (chats.isEmpty()) error = "No conversations yet."
-        } catch (_: Exception) {
-            error = "Cannot connect to the server."
-        } finally {
-            loading = false
-        }
-    }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp)
-    ) {
-        Text("SabayChart", style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(16.dp))
-        Text("All Chats", color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(12.dp))
-        if (loading) {
-            Text("Loading your chats...")
-        } else if (error.isNotEmpty()) {
-            Text(error)
-        } else {
-            chats.forEach { (name, message) ->
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                    Text(name, style = MaterialTheme.typography.titleMedium)
-                    Text(message, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
+    var showProfile by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Chat?>(null) }
+    LaunchedEffect(Unit) { try { chats = loadChats() } catch (_: Exception) { error = "Cannot connect to the server." }; loading = false }
+    if (selected != null) { ConversationScreen(selected!!, onBack = { selected = null }); return }
+    if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)
+    else Column(Modifier.fillMaxSize().background(Navy)) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Text("KH", color = Color.White, modifier = Modifier.background(Blue, CircleShape).padding(8.dp)); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Text("●", color = Color.White) } }
+        Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill("All Chats", true); Pill("Personal", false); Pill("Groups", false) }
+        Field(search, { search = it }, "Search chats, groups, and people...", KeyboardType.Text, ImeAction.Search)
+        when { loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(32.dp), color = Blue); error.isNotEmpty() -> Text(error, color = Color.White, modifier = Modifier.padding(20.dp)); else -> LazyColumn(Modifier.weight(1f)) { items(chats.filter { it.name.contains(search, true) }) { chat -> ChatRow(chat) { selected = chat } } } }
+        Row(Modifier.fillMaxWidth().background(Color(0xFF111C2D)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceAround) { Text("Chats", color = Blue); Text("Contacts", color = Muted); Text("Calls", color = Muted); Text("Settings", color = Muted) }
     }
 }
 
-private fun loadConversations(): List<Pair<String, String>> {
-    val connection = URL("https://chart-ztyk.onrender.com/api/conversations").openConnection() as HttpURLConnection
-    return try {
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        if (connection.responseCode !in 200..299) throw IllegalStateException()
-        val json = connection.inputStream.bufferedReader().use { it.readText() }
-        val array = JSONArray(json)
-        List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            val lastMessage = item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet"
-            item.optString("name", "Conversation") to lastMessage
-        }
-    } finally {
-        connection.disconnect()
-    }
-}
+@Composable private fun Pill(text: String, active: Boolean) { Text(text, color = Color.White, fontSize = 12.sp, modifier = Modifier.background(if (active) Blue else Color(0xFF18253A), RoundedCornerShape(50)).padding(horizontal = 14.dp, vertical = 8.dp)) }
+@Composable private fun ChatRow(chat: Chat, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Text(chat.name.take(1).uppercase(), color = Color.White, modifier = Modifier.size(52.dp).background(Blue.copy(alpha = .35f), CircleShape).padding(16.dp)); Spacer(Modifier.width(14.dp)); Column { Text(chat.name, color = Color.White, style = MaterialTheme.typography.titleMedium); Text(chat.message, color = Muted, maxLines = 1) } } }
 
-private suspend fun authenticate(register: Boolean, name: String, email: String, password: String): String? = withContext(Dispatchers.IO) {
-    if (email.isBlank() || password.isBlank() || (register && name.isBlank())) return@withContext "Complete all fields."
-    if (register && password.length < 6) return@withContext "Password must be at least 6 characters."
-    val connection = (URL("https://chart-ztyk.onrender.com/api/auth/${if (register) "register" else "login"}").openConnection() as HttpURLConnection)
-    try {
-        connection.requestMethod = "POST"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        connection.doOutput = true
-        connection.setRequestProperty("Content-Type", "application/json")
-        val body = if (register) "{\"name\":\"${name.jsonEscape()}\",\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}" else "{\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}"
-        connection.outputStream.use { it.write(body.toByteArray()) }
-        if (connection.responseCode in 200..299) null else "Server error (${connection.responseCode})."
-    } catch (_: Exception) {
-        "Cannot connect to the server. Check your internet connection."
-    } finally {
-        connection.disconnect()
-    }
-}
+@Composable private fun ProfileScreen(profile: UserProfile, onBack: () -> Unit, onLogout: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back", color = Blue) }; Spacer(Modifier.height(24.dp)); Text("Profile", color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(24.dp)); Text(profile.name, color = Color.White, style = MaterialTheme.typography.headlineSmall); Text(profile.email, color = Muted); Spacer(Modifier.height(24.dp)); Text("Account details", color = Muted); Spacer(Modifier.height(8.dp)); Text("Online", color = Color(0xFF52D39B)); Spacer(Modifier.height(32.dp)); Button(onClick = onLogout) { Text("Log out") } } }
 
+@Composable private fun ConversationScreen(chat: Chat, onBack: () -> Unit) { var draft by remember { mutableStateOf("") }; val keyboard = LocalSoftwareKeyboardController.current; Column(Modifier.fillMaxSize().background(Navy)) { TextButton(onClick = onBack) { Text("‹  ${chat.name}", color = Color.White) }; Column(Modifier.weight(1f).padding(20.dp)) { Text(chat.message, color = Color.White, modifier = Modifier.background(Color(0xFF18253A), RoundedCornerShape(16.dp)).padding(12.dp)) }; Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Field(draft, { draft = it }, "Type a message...", KeyboardType.Text, ImeAction.Done, keyboard = keyboard); Spacer(Modifier.width(8.dp)); Button(onClick = { keyboard?.hide(); draft = "" }) { Text("Send") } } } }
+
+data class UserProfile(val name: String, val email: String)
+data class Chat(val name: String, val message: String)
+
+private suspend fun authenticate(register: Boolean, name: String, email: String, password: String): Pair<UserProfile?, String?> = withContext(Dispatchers.IO) { if (email.isBlank() || password.isBlank() || (register && name.isBlank())) return@withContext null to "Complete all fields."; if (register && password.length < 6) return@withContext null to "Password must be at least 6 characters."; val response = request("/api/auth/${if (register) "register" else "login"}", "{\"name\":\"${name.jsonEscape()}\",\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}"); if (response.first in 200..299) UserProfile(if (register) name else email.substringBefore("@"), email) to null else null to "Server error (${response.first})." }
+private suspend fun loadChats(): List<Chat> = withContext(Dispatchers.IO) { val response = request("/api/conversations", null); if (response.first !in 200..299) throw IllegalStateException(); val array = JSONArray(response.second); List(array.length()) { val item = array.getJSONObject(it); Chat(item.optString("name", "Conversation"), item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet") } }
+private fun request(path: String, body: String?): Pair<Int, String> { val connection = URL(API_BASE_URL + path).openConnection() as HttpURLConnection; return try { connection.requestMethod = if (body == null) "GET" else "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000; if (body != null) { connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json"); connection.outputStream.use { it.write(body.toByteArray()) } }; val responseCode = connection.responseCode; val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream; responseCode to (stream?.bufferedReader()?.use { it.readText() } ?: "") } finally { connection.disconnect() } }
 private fun String.jsonEscape() = replace("\\", "\\\\").replace("\"", "\\\"")

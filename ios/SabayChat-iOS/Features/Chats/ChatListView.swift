@@ -6,6 +6,7 @@ struct ChatListView: View {
     @State private var selected: Conversation?
     @State private var isLoading = true
     @State private var error = ""
+    @State private var showProfile = false
 
     private var filtered: [Conversation] {
         guard !search.isEmpty else { return conversations }
@@ -22,6 +23,7 @@ struct ChatListView: View {
                         Spacer()
                         Text("KH").font(.caption.bold()).foregroundStyle(.white).padding(7).background(SabayChatColors.primary).clipShape(Circle())
                         Image(systemName: "bell").foregroundStyle(.white)
+                        Button { showProfile = true } label: { Image(systemName: "person.crop.circle.fill").foregroundStyle(.white) }
                     }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
                     HStack(spacing: 8) {
                         Text("All Chats").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.primary).clipShape(Capsule())
@@ -36,6 +38,7 @@ struct ChatListView: View {
                     HStack { tab("bubble.left.and.bubble.right.fill", "Chats", true); tab("person.2", "Contacts", false); tab("phone", "Calls", false); tab("gearshape", "Settings", false) }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
             }.task { await load() }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
+                .sheet(isPresented: $showProfile) { ProfileView() }
         }.preferredColorScheme(.dark)
     }
 
@@ -49,6 +52,25 @@ struct ChatListView: View {
     private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }
     private func state(title: String, detail: String) -> some View { VStack(spacing: 10) { Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 34)); Text(title).font(.headline); Text(detail).font(.subheadline).multilineTextAlignment(.center).foregroundStyle(SabayChatColors.textSecondary) }.foregroundStyle(.white).padding().frame(maxHeight: .infinity) }
     private func load() async { do { let (data, response) = try await URLSession.shared.data(from: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
+}
+
+private struct ProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                SabayChatColors.background.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 14) {
+                    ZStack { Circle().fill(SabayChatColors.primary); Text("DR").font(.title.bold()).foregroundStyle(.white) }.frame(width: 88, height: 88)
+                    Text("Your profile").font(.title.bold()).foregroundStyle(.white)
+                    Text("Signed-in account").foregroundStyle(SabayChatColors.textSecondary)
+                    Divider().overlay(SabayChatColors.border)
+                    Label("Account is connected to SabayChart", systemImage: "checkmark.seal.fill").foregroundStyle(SabayChatColors.success)
+                    Spacer()
+                }.padding(24)
+            }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) } }
+        }.preferredColorScheme(.dark)
+    }
 }
 
 struct Conversation: Identifiable, Codable, Hashable { let id: String; let name: String?; let participants: [String]; let type: String; let lastMessage: Message?; let updatedAt: String }
