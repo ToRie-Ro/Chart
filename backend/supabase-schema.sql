@@ -52,6 +52,14 @@ create table if not exists public.email_login_challenges (
 create index if not exists email_login_challenges_user_idx on public.email_login_challenges (user_id, created_at desc);
 create index if not exists users_presence_idx on public.users (is_online, last_seen desc);
 
+-- Convert databases created by the original UUID conversation schema before
+-- creating the text-based conversation relationships below.
+alter table if exists public.messages drop constraint if exists messages_conversation_id_fkey;
+alter table if exists public.conversation_participants drop constraint if exists conversation_participants_conversation_id_fkey;
+alter table if exists public.messages alter column conversation_id type text using conversation_id::text;
+alter table if exists public.conversation_participants alter column conversation_id type text using conversation_id::text;
+alter table if exists public.conversations alter column id type text using id::text;
+
 create table if not exists public.conversations (
   id text primary key default gen_random_uuid()::text,
   name text,
@@ -74,6 +82,11 @@ create table if not exists public.conversation_participants (
   joined_at timestamptz not null default now(),
   primary key (conversation_id, user_id)
 );
+
+alter table public.messages drop constraint if exists messages_conversation_id_fkey;
+alter table public.conversation_participants drop constraint if exists conversation_participants_conversation_id_fkey;
+alter table public.messages add constraint messages_conversation_id_fkey foreign key (conversation_id) references public.conversations(id) on delete cascade;
+alter table public.conversation_participants add constraint conversation_participants_conversation_id_fkey foreign key (conversation_id) references public.conversations(id) on delete cascade;
 
 create table if not exists public.friend_requests (
   id uuid primary key default gen_random_uuid(),
