@@ -33,8 +33,15 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-app.get('/api/conversations', (_req, res) => {
-  res.json(mockConversations);
+app.get('/api/conversations', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data, error } = await supabase.from('conversation_participants').select('conversation_id, conversations(id, name, type, created_at)').eq('user_id', userId);
+  if (error) return res.status(500).json({ error: 'Could not load conversations.' });
+  return res.json((data ?? []).map((entry) => {
+    const conversation = Array.isArray(entry.conversations) ? entry.conversations[0] : entry.conversations;
+    return { id: conversation?.id ?? entry.conversation_id, name: conversation?.name, participants: [userId], type: conversation?.type ?? 'direct', updatedAt: conversation?.created_at ?? new Date().toISOString() };
+  }));
 });
 
 app.get('/api/messages/:conversationId', async (req, res) => {
@@ -98,12 +105,26 @@ async function register(name: unknown, email: string, password: string) {
   const username = email.split('@')[0].replace(/[^a-z0-9_]/g, '') || `user_${Date.now()}`;
   const { data, error } = await supabase.from('users').insert({ name: String(name).trim(), email, username, password_hash: await bcrypt.hash(password, 12) }).select('*').single();
   if (error) return { status: error.code === '23505' ? 409 : 500, body: { error: error.code === '23505' ? 'An account with this email already exists.' : 'Could not create account.' } };
+  await supabase.from('conversation_participants').insert([
+    { conversation_id: 'conv_1', user_id: data.id },
+    { conversation_id: 'conv_2', user_id: data.id },
+  ]);
   const user = publicUser(data);
   return { status: 201, body: { token: jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' }), user } };
 }
 
 function publicUser(user: Record<string, unknown>) {
   return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), isOnline: true, lastSeen: new Date().toISOString(), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
+}
+
+function authenticatedUserId(req: express.Request) {
+  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  try {
+    return String((jwt.verify(token, env.jwtSecret) as jwt.JwtPayload).sub);
+  } catch {
+    return null;
+  }
 }
 
 const server = app.listen(env.port, () => {
