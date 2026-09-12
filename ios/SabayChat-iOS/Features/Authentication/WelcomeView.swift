@@ -137,6 +137,7 @@ struct WelcomeView: View {
                             .font(.headline)
                             .sabayGlass(cornerRadius: 14)
                     }
+                    }
                 }
                 .padding(24)
                 .frame(maxWidth: 380)
