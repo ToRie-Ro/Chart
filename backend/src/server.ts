@@ -8,6 +8,7 @@ import { supabase } from './config/supabase.js';
 import { mockConversations, mockMessages, mockUsers } from './data/mockData.js';
 
 const app = express();
+const activeConnections = new Map<string, number>();
 app.use(cors());
 app.use(express.json());
 
@@ -16,7 +17,11 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/api/users', (_req, res) => {
-  res.json(mockUsers);
+  if (!supabase) return res.json(mockUsers);
+  void supabase.from('users').select('id, name, email, username, bio, avatar_url, is_online, last_seen, locale, role').then(({ data, error }) => {
+    if (error) return res.status(500).json({ error: 'Could not load users.' });
+    return res.json((data ?? []).map(publicUser));
+  });
 });
 
 app.get('/api/me', async (req, res) => {
@@ -164,7 +169,12 @@ async function register(name: unknown, email: string, password: string) {
 }
 
 function publicUser(user: Record<string, unknown>) {
-  return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined, plan: user.plan === 'premium' ? 'premium' : 'free', isOnline: true, lastSeen: new Date().toISOString(), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
+  return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined, plan: user.plan === 'premium' ? 'premium' : 'free', isOnline: user.is_online === true, lastSeen: String(user.last_seen ?? new Date().toISOString()), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
+}
+
+async function setPresence(userId: string, isOnline: boolean) {
+  if (!supabase) return;
+  await supabase.from('users').update({ is_online: isOnline, last_seen: new Date().toISOString() }).eq('id', userId);
 }
 
 function authenticatedUserId(req: express.Request) {
@@ -196,6 +206,9 @@ wss.on('connection', (ws, request) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const userId = verifyToken(url.searchParams.get('token'));
   if (!userId) return ws.close(1008, 'Authentication required.');
+  activeConnections.set(userId, (activeConnections.get(userId) ?? 0) + 1);
+  void setPresence(userId, true);
+  const heartbeat = setInterval(() => void setPresence(userId, true), 30_000);
 
   ws.on('message', (raw) => {
     try {
@@ -210,6 +223,17 @@ wss.on('connection', (ws, request) => {
       });
     } catch (error) {
       console.error('Failed to parse websocket message', error);
+    }
+  });
+
+  ws.on('close', () => {
+    clearInterval(heartbeat);
+    const remaining = (activeConnections.get(userId) ?? 1) - 1;
+    if (remaining <= 0) {
+      activeConnections.delete(userId);
+      void setPresence(userId, false);
+    } else {
+      activeConnections.set(userId, remaining);
     }
   });
 

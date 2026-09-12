@@ -8,6 +8,8 @@ create table if not exists public.conversation_participants (
 
 alter table public.users add column if not exists plan text not null default 'free';
 alter table public.users add column if not exists avatar_url text;
+alter table public.users add column if not exists is_online boolean not null default false;
+alter table public.users add column if not exists last_seen timestamptz not null default now();
 create table if not exists public.device_sessions (
 	id uuid primary key default gen_random_uuid(),
 	user_id uuid not null references public.users(id) on delete cascade,

@@ -9,6 +9,8 @@ create table if not exists public.users (
   role text not null default 'user',
   plan text not null default 'free',
   avatar_url text,
+  is_online boolean not null default false,
+  last_seen timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -23,6 +25,7 @@ create table if not exists public.device_sessions (
 );
 
 create index if not exists device_sessions_user_idx on public.device_sessions (user_id, last_active_at desc);
+create index if not exists users_presence_idx on public.users (is_online, last_seen desc);
 
 create table if not exists public.conversations (
   id text primary key default gen_random_uuid()::text,

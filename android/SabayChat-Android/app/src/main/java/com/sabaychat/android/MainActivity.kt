@@ -54,6 +54,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 
 private const val API_BASE_URL = "https://chart-ztyk.onrender.com"
 private val Navy = Color(0xFF091326)
@@ -128,6 +132,11 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Chat?>(null) }
     var tab by remember { mutableStateOf("Chats") }
+    DisposableEffect(profile.token) {
+        val client = OkHttpClient()
+        val socket = client.newWebSocket(Request.Builder().url("wss://chart-ztyk.onrender.com/ws?token=${profile.token}").build(), object : WebSocketListener() {})
+        onDispose { socket.close(1000, "App closed"); client.dispatcher.executorService.shutdown() }
+    }
     LaunchedEffect(Unit) { try { chats = loadChats(profile.token) } catch (_: Exception) { error = "Cannot connect to the server." }; loading = false }
     if (selected != null) { ConversationScreen(selected!!, profile.token, onBack = { selected = null }); return }
     if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)

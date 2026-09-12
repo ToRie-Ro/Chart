@@ -8,6 +8,7 @@ struct ChatListView: View {
     @State private var error = ""
     @State private var showProfile = false
     @State private var selectedTab = "Chats"
+    @State private var presenceSocket: URLSessionWebSocketTask?
 
     private var filtered: [Conversation] {
         guard !search.isEmpty else { return conversations }
@@ -39,7 +40,7 @@ struct ChatListView: View {
                     else { ScrollView { LazyVStack(spacing: 0) { ForEach(filtered) { item in Button { selected = item } label: { row(item) }.buttonStyle(.plain) } } }.refreshable { await load() } }
                     HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
-            }.task { await load() }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
+            }.task { await load(); connectPresence() }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
                 .sheet(isPresented: $showProfile) { ProfileView() }
         }.preferredColorScheme(.dark)
     }
@@ -54,6 +55,7 @@ struct ChatListView: View {
     private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { Button { selectedTab = title } label: { VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }.buttonStyle(.plain) }
     private func state(title: String, detail: String) -> some View { VStack(spacing: 10) { Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 34)); Text(title).font(.headline); Text(detail).font(.subheadline).multilineTextAlignment(.center).foregroundStyle(SabayChatColors.textSecondary) }.foregroundStyle(.white).padding().frame(maxHeight: .infinity) }
     private func load() async { do { var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); if let token = keychainToken() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; let (data, response) = try await URLSession.shared.data(for: request); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
+    private func connectPresence() { guard let token = keychainToken(), let url = URL(string: "wss://chart-ztyk.onrender.com/ws?token=\(token)") else { return }; presenceSocket = URLSession.shared.webSocketTask(with: url); presenceSocket?.resume() }
 }
 
 private struct UtilityView: View {
