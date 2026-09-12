@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: chart
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: APP_NAME
+        value: SabayChat
+      - key: APP_ENV
+        value: production
+      - key: API_BASE_URL
+        value: https://chart-ztyk.onrender.com
+      - key: JWT_SECRET
+        generateValue: true
