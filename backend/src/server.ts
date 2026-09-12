@@ -131,15 +131,31 @@ const server = app.listen(env.port, () => {
   console.log(`${env.appName} backend running on port ${env.port}`);
 });
 
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ noServer: true });
 
-wss.on('connection', (ws) => {
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+  if (url.pathname !== '/ws' || !verifyToken(url.searchParams.get('token'))) {
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+});
+
+wss.on('connection', (ws, request) => {
+  const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+  const userId = verifyToken(url.searchParams.get('token'));
+  if (!userId) return ws.close(1008, 'Authentication required.');
+
   ws.on('message', (raw) => {
     try {
       const message = JSON.parse(raw.toString());
+      if (typeof message.conversationId !== 'string' || typeof message.text !== 'string' || !message.text.trim()) return;
+      const payload = { ...message, senderId: userId, text: message.text.trim() };
+      void supabase?.from('messages').insert({ conversation_id: payload.conversationId, sender_id: userId, text: payload.text, status: 'sent' });
       wss.clients.forEach((client) => {
-        if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'message', payload: message }));
+        if (client.readyState === 1 && client !== ws) {
+          client.send(JSON.stringify({ type: 'message', payload }));
         }
       });
     } catch (error) {
@@ -147,5 +163,15 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.send(JSON.stringify({ type: 'connected', payload: { app: env.appName } }));
+  ws.send(JSON.stringify({ type: 'connected', payload: { app: env.appName, userId } }));
 });
+
+function verifyToken(token: string | null) {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import Security
 
 struct WelcomeView: View {
     @FocusState private var focusedField: Field?
@@ -180,7 +181,7 @@ struct WelcomeView: View {
                     message = mode == .login ? "Login successful." : "Account created successfully."
                     UserDefaults.standard.set(true, forKey: "isAuthenticated")
                     if let data, let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = auth["token"] as? String, let user = auth["user"] as? [String: Any] {
-                        UserDefaults.standard.set(token, forKey: "authToken")
+                        saveKeychainToken(token)
                         UserDefaults.standard.set(user["name"] as? String, forKey: "profileName")
                         UserDefaults.standard.set(user["email"] as? String, forKey: "profileEmail")
                     }
@@ -199,4 +200,18 @@ struct WelcomeView: View {
 
 #Preview {
     WelcomeView()
+}
+
+func saveKeychainToken(_ token: String) {
+    let data = Data(token.utf8)
+    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: "sabaychart.authToken", kSecValueData as String: data]
+    SecItemDelete(query as CFDictionary)
+    SecItemAdd(query as CFDictionary, nil)
+}
+
+func keychainToken() -> String? {
+    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: "sabaychart.authToken", kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+    var result: AnyObject?
+    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
 }

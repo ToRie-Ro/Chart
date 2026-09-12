@@ -7,6 +7,7 @@ struct ChatListView: View {
     @State private var isLoading = true
     @State private var error = ""
     @State private var showProfile = false
+    @State private var selectedTab = "Chats"
 
     private var filtered: [Conversation] {
         guard !search.isEmpty else { return conversations }
@@ -31,11 +32,12 @@ struct ChatListView: View {
                         Text("Groups").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.surface).clipShape(Capsule())
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 12)
                     HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary); TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary) }.padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20).padding(.bottom, 8)
-                    if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
+                    if selectedTab != "Chats" { UtilityView(title: selectedTab) }
+                    else if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
                     else if !error.isEmpty { state(title: "Could not load chats", detail: error) }
                     else if filtered.isEmpty { state(title: "No chats yet", detail: "Start a conversation to see it here.") }
                     else { ScrollView { LazyVStack(spacing: 0) { ForEach(filtered) { item in Button { selected = item } label: { row(item) }.buttonStyle(.plain) } } }.refreshable { await load() } }
-                    HStack { tab("bubble.left.and.bubble.right.fill", "Chats", true); tab("person.2", "Contacts", false); tab("phone", "Calls", false); tab("gearshape", "Settings", false) }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
+                    HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
             }.task { await load() }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
                 .sheet(isPresented: $showProfile) { ProfileView() }
@@ -49,9 +51,22 @@ struct ChatListView: View {
             Spacer(); Text(String(item.updatedAt.split(separator: "T").last?.prefix(5) ?? "")).font(.caption).foregroundStyle(SabayChatColors.textSecondary)
         }.padding(.horizontal, 20).padding(.vertical, 14).overlay(alignment: .bottom) { Divider().overlay(SabayChatColors.border.opacity(0.35)).padding(.leading, 86) }
     }
-    private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }
+    private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { Button { selectedTab = title } label: { VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }.buttonStyle(.plain) }
     private func state(title: String, detail: String) -> some View { VStack(spacing: 10) { Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 34)); Text(title).font(.headline); Text(detail).font(.subheadline).multilineTextAlignment(.center).foregroundStyle(SabayChatColors.textSecondary) }.foregroundStyle(.white).padding().frame(maxHeight: .infinity) }
-    private func load() async { do { var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); if let token = UserDefaults.standard.string(forKey: "authToken") { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; let (data, response) = try await URLSession.shared.data(for: request); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
+    private func load() async { do { var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); if let token = keychainToken() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; let (data, response) = try await URLSession.shared.data(for: request); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
+}
+
+private struct UtilityView: View {
+    let title: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
+            if title == "Contacts" { Text("People you can chat with").foregroundStyle(SabayChatColors.textSecondary); Label("Da Rea", systemImage: "person.crop.circle.fill"); Label("Sokha Mean", systemImage: "person.crop.circle.fill") }
+            else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
+            else { Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
+            Spacer()
+        }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 private struct ProfileView: View {
@@ -92,5 +107,5 @@ struct ConversationView: View {
     }
     private func bubble(_ text: String, mine: Bool) -> some View { Text(text).foregroundStyle(.white).padding(12).background(mine ? SabayChatColors.primary : SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 16)) }
     private func load() async { guard let url = URL(string: "https://chart-ztyk.onrender.com/api/messages/\(conversation.id)"), let (data, _) = try? await URLSession.shared.data(from: url) else { return }; messages = (try? JSONDecoder().decode([Message].self, from: data)) ?? [] }
-    private func send() { let text = draft.trimmingCharacters(in: .whitespaces); guard !text.isEmpty, let url = URL(string: "https://chart-ztyk.onrender.com/api/messages/\(conversation.id)") else { return }; var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); if let token = UserDefaults.standard.string(forKey: "authToken") { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; request.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text]); URLSession.shared.dataTask(with: request) { data, response, _ in guard (response as? HTTPURLResponse)?.statusCode == 201, let data, let saved = try? JSONDecoder().decode(Message.self, from: data) else { return }; DispatchQueue.main.async { messages.append(saved) } }.resume(); draft = ""; focused = false }
+    private func send() { let text = draft.trimmingCharacters(in: .whitespaces); guard !text.isEmpty, let url = URL(string: "https://chart-ztyk.onrender.com/api/messages/\(conversation.id)") else { return }; var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); if let token = keychainToken() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; request.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text]); URLSession.shared.dataTask(with: request) { data, response, _ in guard (response as? HTTPURLResponse)?.statusCode == 201, let data, let saved = try? JSONDecoder().decode(Message.self, from: data) else { return }; DispatchQueue.main.async { messages.append(saved) } }.resume(); draft = ""; focused = false }
 }

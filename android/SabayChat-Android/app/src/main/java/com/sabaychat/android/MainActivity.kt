@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -68,10 +69,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AppRoot() {
-    var authenticated by remember { mutableStateOf(false) }
-    var profile by remember { mutableStateOf(UserProfile("Da Rea", "darea@sabaychat.app", "")) }
-    if (authenticated) ChatHome(profile, onLogout = { authenticated = false })
-    else AuthScreen { user -> profile = user; authenticated = true }
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("sabaychart_session", 0) }
+    var authenticated by remember { mutableStateOf(preferences.getBoolean("authenticated", false)) }
+    var profile by remember { mutableStateOf(UserProfile(preferences.getString("name", "Da Rea") ?: "Da Rea", preferences.getString("email", "") ?: "", preferences.getString("token", "") ?: "")) }
+    if (authenticated) ChatHome(profile, onLogout = { preferences.edit().clear().apply(); authenticated = false })
+    else AuthScreen { user -> preferences.edit().putBoolean("authenticated", true).putString("name", user.name).putString("email", user.email).putString("token", user.token).apply(); profile = user; authenticated = true }
 }
 
 @Composable
@@ -124,15 +127,17 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
     var error by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Chat?>(null) }
+    var tab by remember { mutableStateOf("Chats") }
     LaunchedEffect(Unit) { try { chats = loadChats(profile.token) } catch (_: Exception) { error = "Cannot connect to the server." }; loading = false }
     if (selected != null) { ConversationScreen(selected!!, profile.token, onBack = { selected = null }); return }
     if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)
+    else if (tab != "Chats") UtilityScreen(tab) { tab = "Chats" }
     else Column(Modifier.fillMaxSize().background(Navy)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Icon(Icons.Default.Bell, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill("All Chats", true); Pill("Personal", false); Pill("Groups", false) }
         Field(search, { search = it }, "Search chats, groups, and people...", KeyboardType.Text, ImeAction.Search)
         when { loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(32.dp), color = Blue); error.isNotEmpty() -> Text(error, color = Color.White, modifier = Modifier.padding(20.dp)); else -> LazyColumn(Modifier.weight(1f)) { items(chats.filter { it.name.contains(search, true) }) { chat -> ChatRow(chat) { selected = chat } } } }
-        Row(Modifier.fillMaxWidth().background(Color(0xFF111C2D)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceAround) { Icon(Icons.Default.ChatBubble, "Chats", tint = Blue); Icon(Icons.Default.Person, "Contacts", tint = Muted); Icon(Icons.Default.Phone, "Calls", tint = Muted); Icon(Icons.Default.Settings, "Settings", tint = Muted) }
+        Row(Modifier.fillMaxWidth().background(Color(0xFF111C2D)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceAround) { IconButton(onClick = { tab = "Chats" }) { Icon(Icons.Default.ChatBubble, "Chats", tint = Blue) }; IconButton(onClick = { tab = "Contacts" }) { Icon(Icons.Default.Person, "Contacts", tint = Muted) }; IconButton(onClick = { tab = "Calls" }) { Icon(Icons.Default.Phone, "Calls", tint = Muted) }; IconButton(onClick = { tab = "Settings" }) { Icon(Icons.Default.Settings, "Settings", tint = Muted) } }
     }
 }
 
@@ -140,6 +145,7 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
 @Composable private fun ChatRow(chat: Chat, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) { Text(chat.name.take(1).uppercase(), color = Color.White, modifier = Modifier.size(52.dp).background(Blue.copy(alpha = .35f), CircleShape).padding(16.dp)); Spacer(Modifier.width(14.dp)); Column { Text(chat.name, color = Color.White, style = MaterialTheme.typography.titleMedium); Text(chat.message, color = Muted, maxLines = 1) } } }
 
 @Composable private fun ProfileScreen(profile: UserProfile, onBack: () -> Unit, onLogout: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back", color = Blue) }; Spacer(Modifier.height(24.dp)); Text("Profile", color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(24.dp)); Text(profile.name, color = Color.White, style = MaterialTheme.typography.headlineSmall); Text(profile.email, color = Muted); Spacer(Modifier.height(24.dp)); Text("Account details", color = Muted); Spacer(Modifier.height(8.dp)); Text("Online", color = Color(0xFF52D39B)); Spacer(Modifier.height(32.dp)); Button(onClick = onLogout) { Text("Log out") } } }
+@Composable private fun UtilityScreen(title: String, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back to chats", color = Blue) }; Spacer(Modifier.height(24.dp)); Text(title, color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(18.dp)); when (title) { "Contacts" -> { Text("People you can chat with", color = Muted); Text("Da Rea", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Sokha Mean", color = Color.White, modifier = Modifier.padding(top = 14.dp)) }; "Calls" -> { Text("Your call history", color = Muted); Text("No calls yet", color = Color.White, modifier = Modifier.padding(top = 20.dp)) }; else -> { Text("Notifications", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Dark appearance", color = Color.White, modifier = Modifier.padding(top = 20.dp)); Text("Connected to SabayChart server", color = Color(0xFF52D39B), modifier = Modifier.padding(top = 20.dp)) } } } }
 
 @Composable private fun ConversationScreen(chat: Chat, token: String, onBack: () -> Unit) { var draft by remember { mutableStateOf("") }; var sent by remember { mutableStateOf("") }; val keyboard = LocalSoftwareKeyboardController.current; val scope = rememberCoroutineScope(); Column(Modifier.fillMaxSize().background(Navy)) { TextButton(onClick = onBack) { Text("‹  ${chat.name}", color = Color.White) }; Column(Modifier.weight(1f).padding(20.dp)) { Text(chat.message, color = Color.White, modifier = Modifier.background(Color(0xFF18253A), RoundedCornerShape(16.dp)).padding(12.dp)); if (sent.isNotEmpty()) Text(sent, color = Color.White, modifier = Modifier.padding(top = 12.dp).background(Blue, RoundedCornerShape(16.dp)).padding(12.dp)) }; Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Field(draft, { draft = it }, "Type a message...", KeyboardType.Text, ImeAction.Done, keyboard = keyboard); Spacer(Modifier.width(8.dp)); Button(onClick = { val text = draft.trim(); if (text.isNotEmpty()) { keyboard?.hide(); sent = text; draft = ""; scope.launch { request("/api/messages/${chat.id}", "{\"text\":\"${text.jsonEscape()}\"}", token) } } }) { Text("Send") } } } }
 
