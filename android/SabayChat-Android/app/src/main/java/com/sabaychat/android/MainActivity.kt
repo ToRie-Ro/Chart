@@ -30,7 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bell
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -142,7 +142,7 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
     if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)
     else if (tab != "Chats") UtilityScreen(tab) { tab = "Chats" }
     else Column(Modifier.fillMaxSize().background(Navy)) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Icon(Icons.Default.Bell, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Icon(Icons.Default.Notifications, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill("All Chats", true); Pill("Personal", false); Pill("Groups", false) }
         Field(search, { search = it }, "Search chats, groups, and people...", KeyboardType.Text, ImeAction.Search)
         when { loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(32.dp), color = Blue); error.isNotEmpty() -> Text(error, color = Color.White, modifier = Modifier.padding(20.dp)); else -> LazyColumn(Modifier.weight(1f)) { items(chats.filter { it.name.contains(search, true) }) { chat -> ChatRow(chat) { selected = chat } } } }
