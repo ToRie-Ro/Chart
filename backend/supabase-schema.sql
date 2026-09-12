@@ -7,8 +7,22 @@ create table if not exists public.users (
   bio text not null default '',
   locale text not null default 'en',
   role text not null default 'user',
+  plan text not null default 'free',
+  avatar_url text,
   created_at timestamptz not null default now()
 );
+
+create table if not exists public.device_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  device_name text not null,
+  platform text not null,
+  last_active_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+
+create index if not exists device_sessions_user_idx on public.device_sessions (user_id, last_active_at desc);
 
 create table if not exists public.conversations (
   id text primary key default gen_random_uuid()::text,
@@ -39,6 +53,7 @@ alter table public.users enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.conversation_participants enable row level security;
+alter table public.device_sessions enable row level security;
 
 insert into public.conversations (id, name, type)
 values ('conv_1', 'Da Rea', 'direct'), ('conv_2', 'Design Team', 'group')

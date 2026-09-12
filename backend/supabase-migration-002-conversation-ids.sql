@@ -6,6 +6,18 @@ create table if not exists public.conversation_participants (
 	primary key (conversation_id, user_id)
 );
 
+alter table public.users add column if not exists plan text not null default 'free';
+alter table public.users add column if not exists avatar_url text;
+create table if not exists public.device_sessions (
+	id uuid primary key default gen_random_uuid(),
+	user_id uuid not null references public.users(id) on delete cascade,
+	device_name text not null,
+	platform text not null,
+	last_active_at timestamptz not null default now(),
+	created_at timestamptz not null default now(),
+	revoked_at timestamptz
+);
+
 alter table public.messages drop constraint if exists messages_conversation_id_fkey;
 alter table public.messages alter column conversation_id type text using conversation_id::text;
 alter table public.conversations alter column id type text using id::text;

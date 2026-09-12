@@ -33,6 +33,42 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
+app.get('/api/me/devices', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data, error } = await supabase.from('device_sessions').select('id, device_name, platform, last_active_at, created_at, revoked_at').eq('user_id', userId).is('revoked_at', null).order('last_active_at', { ascending: false });
+  if (error) return res.status(500).json({ error: 'Could not load devices.' });
+  return res.json({ devices: data ?? [] });
+});
+
+app.patch('/api/me', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const updates: Record<string, string> = {};
+  for (const [key, column] of [['name', 'name'], ['bio', 'bio'], ['avatarUrl', 'avatar_url']] as const) {
+    if (typeof req.body?.[key] === 'string') updates[column] = req.body[key].trim();
+  }
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No profile changes supplied.' });
+  const { data, error } = await supabase.from('users').update(updates).eq('id', userId).select('*').single();
+  if (error || !data) return res.status(500).json({ error: 'Could not update profile.' });
+  return res.json({ user: publicUser(data) });
+});
+
+app.get('/api/premium/features', (_req, res) => {
+  res.json({ plan: 'premium', features: ['HD voice and video calls', 'Custom themes and profile badges', 'Larger file uploads', 'Message editing and history', 'Priority support'] });
+});
+
+app.post('/api/me/devices', async (req, res) => {
+  const userId = authenticatedUserId(req);
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const deviceName = String(req.body?.deviceName ?? '').trim();
+  const platform = String(req.body?.platform ?? '').trim();
+  if (!deviceName || !platform) return res.status(400).json({ error: 'Device name and platform are required.' });
+  const { data, error } = await supabase.from('device_sessions').insert({ user_id: userId, device_name: deviceName, platform }).select('id, device_name, platform, last_active_at, created_at').single();
+  if (error) return res.status(500).json({ error: 'Could not register device.' });
+  return res.status(201).json({ device: data });
+});
+
 app.get('/api/conversations', async (req, res) => {
   const userId = authenticatedUserId(req);
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
@@ -97,7 +133,9 @@ async function login(email: string, password: string) {
   if (error) return { status: 500, body: { error: 'Database request failed.' } };
   if (!data || !(await bcrypt.compare(password, data.password_hash))) return { status: 401, body: { error: 'Invalid credentials.' } };
   const user = publicUser(data);
-  return { status: 200, body: { token: jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' }), user } };
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' });
+  await supabase.from('device_sessions').insert({ user_id: user.id, device_name: 'Mobile device', platform: 'unknown' });
+  return { status: 200, body: { token, user } };
 }
 
 async function register(name: unknown, email: string, password: string) {
@@ -110,11 +148,13 @@ async function register(name: unknown, email: string, password: string) {
     { conversation_id: 'conv_2', user_id: data.id },
   ]);
   const user = publicUser(data);
-  return { status: 201, body: { token: jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' }), user } };
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' });
+  await supabase.from('device_sessions').insert({ user_id: user.id, device_name: 'Mobile device', platform: 'unknown' });
+  return { status: 201, body: { token, user } };
 }
 
 function publicUser(user: Record<string, unknown>) {
-  return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), isOnline: true, lastSeen: new Date().toISOString(), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
+  return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), avatarUrl: user.avatar_url ? String(user.avatar_url) : undefined, plan: user.plan === 'premium' ? 'premium' : 'free', isOnline: true, lastSeen: new Date().toISOString(), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
 }
 
 function authenticatedUserId(req: express.Request) {

@@ -71,6 +71,7 @@ private struct UtilityView: View {
 
 private struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var devices: [String] = []
     var body: some View {
         NavigationStack {
             ZStack {
@@ -83,10 +84,30 @@ private struct ProfileView: View {
                     Text(email).foregroundStyle(SabayChatColors.textSecondary)
                     Divider().overlay(SabayChatColors.border)
                     Label("Account is connected to SabayChart", systemImage: "checkmark.seal.fill").foregroundStyle(SabayChatColors.success)
+                    Text("Devices").font(.headline).foregroundStyle(.white).padding(.top, 12)
+                    if devices.isEmpty { Text("Loading device activity...").foregroundStyle(SabayChatColors.textSecondary) }
+                    else { ForEach(devices, id: \.self) { Label($0, systemImage: "iphone") } }
+                    Text("Premium coming soon").font(.headline).foregroundStyle(.white).padding(.top, 12)
+                    Text("HD calls, custom themes, larger uploads, and priority support.").foregroundStyle(SabayChatColors.textSecondary)
                     Spacer()
                 }.padding(24)
-            }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) } }
+            }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) } }.task { await loadDevices() }
         }.preferredColorScheme(.dark)
+    }
+
+    private func loadDevices() async {
+        guard let url = URL(string: "https://chart-ztyk.onrender.com/api/me/devices"), let token = keychainToken() else { return }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, _) = try? await URLSession.shared.data(for: request), let response = try? JSONDecoder().decode(DeviceResponse.self, from: data) else { return }
+        devices = response.devices.map { "\($0.deviceName) (\($0.platform))" }
+    }
+
+    private struct DeviceResponse: Decodable { let devices: [Device] }
+    private struct Device: Decodable {
+        let deviceName: String
+        let platform: String
+        enum CodingKeys: String, CodingKey { case deviceName = "device_name"; case platform }
     }
 }
 
