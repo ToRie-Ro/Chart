@@ -122,6 +122,22 @@ struct ChatListView: View {
             tab("phone.fill", "Calls", selectedTab == "Calls")
             tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats")
             tab("gearshape.fill", "Settings", selectedTab == "Settings")
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    selectedTab = "Chats"
+                    isSearchExpanded = true
+                    searchFocused = true
+                }
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.headline)
+                    .foregroundStyle(SabayChatColors.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(SabayChatColors.surface.opacity(0.9))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Search chats")
         }
         .padding(.horizontal, 8).padding(.vertical, 9)
         .background(.ultraThinMaterial.opacity(0.96))
