@@ -15,6 +15,16 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
+-- Add fields introduced after the original users table was created.
+alter table public.users add column if not exists bio text not null default '';
+alter table public.users add column if not exists locale text not null default 'en';
+alter table public.users add column if not exists role text not null default 'user';
+alter table public.users add column if not exists plan text not null default 'free';
+alter table public.users add column if not exists avatar_url text;
+alter table public.users add column if not exists phone_number text;
+alter table public.users add column if not exists is_online boolean not null default false;
+alter table public.users add column if not exists last_seen timestamptz not null default now();
+
 create table if not exists public.device_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
