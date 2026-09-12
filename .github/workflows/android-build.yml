@@ -59,8 +59,8 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SabayChat-release.apk
-          path: android/SabayChat-Android/app/build/outputs/apk/release/*.apk
+          name: SabayChart-debug.apk
+          path: android/SabayChat-Android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload AAB artifact
