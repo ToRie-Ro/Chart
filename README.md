@@ -53,6 +53,17 @@ APP_ENV=production
 JWT_SECRET=your-secure-secret
 ```
 
+## Free persistent account storage
+
+Render's filesystem and process memory are not permanent, so the current demo accounts reset when the service restarts. Use a free Supabase PostgreSQL project for persistent users, passwords, conversations, and messages:
+
+1. Create a project at https://supabase.com.
+2. Open **Project Settings > Database** and copy the connection string.
+3. Add it in Render as `DATABASE_URL`.
+4. Keep `JWT_SECRET` as a long random secret and redeploy the backend.
+
+Supabase stores the data; Render continues hosting the Node.js API. Do not put the database password in Git or in the mobile apps.
+
 ## Product goals
 
 - Shared backend and accounts across platforms
