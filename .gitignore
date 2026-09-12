@@ -1,0 +1,40 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.iml
+
+# Node / backend
+backend/node_modules/
+backend/dist/
+backend/.env
+
+# Android
+android/**/.gradle/
+android/**/local.properties
+android/**/build/
+android/**/captures/
+android/**/*.iml
+
+# iOS / Swift
+ios/**/*.xcuserstate
+ios/**/*.xcbkptlist
+ios/**/DerivedData/
+
+# General
+*.log
+
+# Secrets
+.env
+.env.*
+*.p12
+*.pem
+*.mobileprovision
+*.keystore
+*.jks
