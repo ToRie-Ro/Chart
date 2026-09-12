@@ -272,13 +272,14 @@ struct WelcomeView: View {
         let endpoint = mode == .login ? "auth/login" : "auth/register"
         guard let url = URL(string: "https://chart-ztyk.onrender.com/api/\(endpoint)") else { return }
         var request = URLRequest(url: url)
+        request.timeoutInterval = 35
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload = ["email": email, "password": password]
         if mode == .register { payload["name"] = name }
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
-        URLSession.shared.dataTask(with: request) { data, response, _ in
+        URLSession.shared.dataTask(with: request) { data, response, requestError in
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             let serverMessage = data.flatMap { try? JSONDecoder().decode(ServerError.self, from: $0) }?.error
             DispatchQueue.main.async {
@@ -299,7 +300,7 @@ struct WelcomeView: View {
                     }
                     isAuthenticated = true
                 } else {
-                    message = serverMessage ?? "The server could not complete your request."
+                    message = serverMessage ?? requestError?.localizedDescription ?? "The server could not complete your request."
                 }
             }
         }.resume()
@@ -309,17 +310,18 @@ struct WelcomeView: View {
         guard let challengeId, verificationCode.count == 6 else { message = "Enter the 6-digit code."; return }
         isLoading = true
         var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/auth/verify-login-code")!)
+        request.timeoutInterval = 35
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["challengeId": challengeId, "code": verificationCode])
-        URLSession.shared.dataTask(with: request) { data, response, _ in
+        URLSession.shared.dataTask(with: request) { data, response, requestError in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             DispatchQueue.main.async {
                 isLoading = false
                 guard (200..<300).contains(status), let data,
                       let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let token = auth["token"] as? String else {
-                    message = "That code is invalid or expired."; return
+                    message = (try? JSONDecoder().decode(ServerError.self, from: data ?? Data()))?.error ?? requestError?.localizedDescription ?? "That code is invalid or expired."; return
                 }
                 saveKeychainToken(token)
                 isAuthenticated = true

@@ -12,7 +12,15 @@ const app = express();
 const activeConnections = new Map<string, number>();
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 const mailTransport = env.smtpUser && env.smtpPassword && env.emailFrom
-  ? nodemailer.createTransport({ host: env.smtpHost, port: env.smtpPort, secure: env.smtpPort === 465, auth: { user: env.smtpUser, pass: env.smtpPassword } })
+  ? nodemailer.createTransport({
+      host: env.smtpHost,
+      port: env.smtpPort,
+      secure: env.smtpPort === 465,
+      auth: { user: env.smtpUser, pass: env.smtpPassword },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+    })
   : null;
 app.set('trust proxy', 1);
 app.use((req, res, next) => {
