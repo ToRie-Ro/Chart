@@ -128,59 +128,6 @@ private struct UtilityView: View {
                 else { ForEach(contacts) { contact in Label(contact.name, systemImage: contact.isOnline ? "circle.fill" : "person.crop.circle.fill").foregroundStyle(contact.isOnline ? SabayChatColors.success : .white) } }
             }
 
-            private struct NotificationCenterView: View {
-                @Environment(\.dismiss) private var dismiss
-                var body: some View {
-                    NavigationStack {
-                        ZStack {
-                            SabayChatBackground()
-                            VStack(spacing: 14) {
-                                notification(icon: "person.crop.circle.badge.plus", title: "Your inbox is ready", detail: "Friend requests and mentions will appear here.", color: SabayChatColors.primary)
-                                notification(icon: "checkmark.shield.fill", title: "Your account is protected", detail: "Keep your sessions and password secure.", color: SabayChatColors.success)
-                                Spacer()
-                            }.padding(20)
-                        }.navigationTitle("Notifications").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-                    }.preferredColorScheme(.dark)
-                }
-                private func notification(icon: String, title: String, detail: String, color: Color) -> some View {
-                    HStack(spacing: 14) {
-                        Image(systemName: icon).font(.title3).foregroundStyle(color).frame(width: 42, height: 42).background(color.opacity(0.14)).clipShape(Circle())
-                        VStack(alignment: .leading, spacing: 4) { Text(title).font(.headline).foregroundStyle(.white); Text(detail).font(.subheadline).foregroundStyle(SabayChatColors.textSecondary) }
-                        Spacer()
-                    }.padding(16).sabayGlass(cornerRadius: 18)
-                }
-            }
-
-            private struct NewChatView: View {
-                @Environment(\.dismiss) private var dismiss
-                @State private var search = ""
-                @State private var showComingSoon = false
-                var body: some View {
-                    NavigationStack {
-                        ZStack {
-                            SabayChatBackground()
-                            VStack(spacing: 14) {
-                                Text("Start something new").font(.title2.bold()).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
-                                Text("Connect with someone or create a space for your team.").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
-                                HStack { Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary); TextField("Search by username or email", text: $search).foregroundStyle(.white) }.padding(14).sabayGlass(cornerRadius: 16)
-                                quickAction("person.badge.plus", "New contact", "Find someone by username or email", SabayChatColors.primary)
-                                quickAction("person.3.fill", "New group", "Bring your friends together", .purple)
-                                quickAction("megaphone.fill", "New channel", "Share updates with your community", .orange)
-                                Spacer()
-                            }.padding(20)
-                        }.navigationTitle("New chat").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }.alert("Almost ready", isPresented: $showComingSoon) { Button("OK", role: .cancel) {} } message: { Text("This action will connect to your SabayChat server when contact, group, and channel creation endpoints are enabled.") }
-                    }.preferredColorScheme(.dark)
-                }
-                private func quickAction(_ icon: String, _ title: String, _ detail: String, _ color: Color) -> some View {
-                    Button { showComingSoon = true } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: icon).font(.title3).foregroundStyle(color).frame(width: 44, height: 44).background(color.opacity(0.14)).clipShape(Circle())
-                            VStack(alignment: .leading, spacing: 3) { Text(title).font(.headline).foregroundStyle(.white); Text(detail).font(.caption).foregroundStyle(SabayChatColors.textSecondary) }
-                            Spacer(); Image(systemName: "chevron.right").foregroundStyle(SabayChatColors.textSecondary)
-                        }.padding(15).sabayGlass(cornerRadius: 18)
-                    }.buttonStyle(SabayPrimaryButtonStyle())
-                }
-            }
             else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
             else {
                 NavigationLink { ProfileView() } label: { settingRow("person.crop.circle", "Profile details", "Name, email, and account") }
@@ -202,6 +149,88 @@ private struct UtilityView: View {
     private func addFriend() async { let email = friendEmail.trimmingCharacters(in: .whitespacesAndNewlines); guard !email.isEmpty, let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/contacts/requests") else { notice = "Enter an email address."; return }; var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.httpBody = try? JSONSerialization.data(withJSONObject: ["email": email]); do { let (_, response) = try await URLSession.shared.data(for: request); notice = (response as? HTTPURLResponse)?.statusCode == 201 ? "Friend request sent." : "Could not send request." } catch { notice = "Could not connect to SabayChart." }; friendEmail = "" }
 
     private struct Contact: Identifiable, Decodable { let id: String; let name: String; let isOnline: Bool; enum CodingKeys: String, CodingKey { case id, name; case isOnline = "isOnline" } }
+}
+
+private struct NotificationCenterView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                SabayChatBackground()
+                VStack(spacing: 14) {
+                    notification(icon: "person.crop.circle.badge.plus", title: "Your inbox is ready", detail: "Friend requests and mentions will appear here.", color: SabayChatColors.primary)
+                    notification(icon: "checkmark.shield.fill", title: "Your account is protected", detail: "Keep your sessions and password secure.", color: SabayChatColors.success)
+                    Spacer()
+                }.padding(20)
+            }
+            .navigationTitle("Notifications")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func notification(icon: String, title: String, detail: String, color: Color) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.title3).foregroundStyle(color).frame(width: 42, height: 42).background(color.opacity(0.14)).clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline).foregroundStyle(.white)
+                Text(detail).font(.subheadline).foregroundStyle(SabayChatColors.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .sabayGlass(cornerRadius: 18)
+    }
+}
+
+private struct NewChatView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+    @State private var showComingSoon = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                SabayChatBackground()
+                VStack(spacing: 14) {
+                    Text("Start something new").font(.title2.bold()).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Connect with someone or create a space for your team.").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary)
+                        TextField("Search by username or email", text: $search).foregroundStyle(.white)
+                    }.padding(14).sabayGlass(cornerRadius: 16)
+                    quickAction("person.badge.plus", "New contact", "Find someone by username or email", SabayChatColors.primary)
+                    quickAction("person.3.fill", "New group", "Bring your friends together", .purple)
+                    quickAction("megaphone.fill", "New channel", "Share updates with your community", .orange)
+                    Spacer()
+                }.padding(20)
+            }
+            .navigationTitle("New chat")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }
+            .alert("Almost ready", isPresented: $showComingSoon) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("This action will connect to your SabayChat server when contact, group, and channel creation endpoints are enabled.")
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func quickAction(_ icon: String, _ title: String, _ detail: String, _ color: Color) -> some View {
+        Button { showComingSoon = true } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon).font(.title3).foregroundStyle(color).frame(width: 44, height: 44).background(color.opacity(0.14)).clipShape(Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.headline).foregroundStyle(.white)
+                    Text(detail).font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(SabayChatColors.textSecondary)
+            }.padding(15).sabayGlass(cornerRadius: 18)
+        }
+        .buttonStyle(SabayPrimaryButtonStyle())
+    }
 }
 
 private extension UtilityView {
