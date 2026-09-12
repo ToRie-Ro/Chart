@@ -33,20 +33,37 @@ jobs:
 
       - name: Build iOS app
         working-directory: ios/SabayChat-iOS
-        run: xcodebuild -project SabayChat-iOS.xcodeproj -scheme SabayChat-iOS -configuration Release -sdk iphoneos -archivePath build/SabayChat.xcarchive archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+        run: |
+          set -e
+          xcodebuild -project SabayChat-iOS.xcodeproj -scheme SabayChat-iOS -configuration Release -sdk iphoneos -archivePath build/SabayChart.xcarchive archive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+
+      - name: Verify iOS archive
+        working-directory: ios/SabayChat-iOS
+        run: |
+          set -e
+          if [ ! -d build/SabayChart.xcarchive ]; then
+            echo "Archive was not created."
+            exit 1
+          fi
+          find build/SabayChart.xcarchive -type d -name '*.app' -print
 
       - name: Export IPA
         working-directory: ios/SabayChat-iOS
         run: |
           set -e
-          rm -rf build/Payload build/SabayChat.ipa
+          rm -rf build/Payload build/SabayChart.ipa
           mkdir -p build/Payload
-          cp -R build/SabayChat.xcarchive/Products/Applications/SabayChat-iOS.app build/Payload/
-          ditto -c -k --sequesterRsrc --keepParent build/Payload build/SabayChat.ipa
+          APP_PATH=$(find build/SabayChart.xcarchive/Products/Applications -maxdepth 1 -type d -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle was found in the archive."
+            exit 1
+          fi
+          cp -R "$APP_PATH" build/Payload/
+          ditto -c -k --sequesterRsrc --keepParent build/Payload build/SabayChart.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SabayChat.ipa
-          path: ios/SabayChat-iOS/build/SabayChat.ipa
+          name: SabayChart.ipa
+          path: ios/SabayChat-iOS/build/SabayChart.ipa
           if-no-files-found: error
