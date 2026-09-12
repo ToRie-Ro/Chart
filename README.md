@@ -31,6 +31,28 @@ SabayChat/
 └── LICENSE
 ```
 
+## Backend URL
+
+For local development, use:
+
+```text
+http://localhost:4000
+```
+
+For Render production, use your Render service URL, for example:
+
+```text
+https://sabaychat-backend.onrender.com
+```
+
+Set the backend URL in environment variables:
+
+```bash
+API_BASE_URL=https://sabaychat-backend.onrender.com
+APP_ENV=production
+JWT_SECRET=your-secure-secret
+```
+
 ## Product goals
 
 - Shared backend and accounts across platforms
@@ -46,6 +68,7 @@ SabayChat/
 ```bash
 cd backend
 npm install
+cp .env.example .env
 npm run dev
 ```
 
