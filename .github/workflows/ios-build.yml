@@ -14,6 +14,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate Xcode project exists
+        run: |
+          if [ ! -d ios/SabayChat-iOS ] || ! find ios/SabayChat-iOS -maxdepth 1 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
+            echo "No Xcode project or workspace was found at ios/SabayChat-iOS. Add the real Xcode project before running the iOS build job."
+            exit 1
+          fi
 
       - name: Select Xcode version
         run: sudo xcode-select -switch /Applications/Xcode_15.4.app
