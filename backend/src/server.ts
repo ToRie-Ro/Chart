@@ -47,6 +47,35 @@ app.use('/api', async (req, res, next) => {
   return next();
 });
 
+app.get('/', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${env.appName} API</title>
+    <style>
+      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #071126; color: #f7f9ff; }
+      main { width: min(560px, calc(100% - 40px)); padding: 40px; box-sizing: border-box; border: 1px solid rgba(255,255,255,.12); border-radius: 28px; background: rgba(22,37,69,.72); box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+      .mark { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, #2b8cff, #1746c7); font-size: 27px; font-weight: 800; }
+      h1 { margin: 24px 0 8px; font-size: 32px; } p { color: #aebbd4; line-height: 1.6; }
+      .status { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; padding: 8px 12px; border-radius: 999px; background: rgba(45,211,144,.12); color: #5ee6b0; font-size: 14px; }
+      code { color: #8dc2ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">S</div>
+      <h1>${env.appName} server</h1>
+      <p>The SabayChat backend is running. Mobile clients connect through the secure REST API and WebSocket service.</p>
+      <div class="status"><span>●</span> Production service online</div>
+      <p>Health endpoint: <code>/health</code><br>WebSocket endpoint: <code>wss://${(_req.headers.host ?? 'chart-ztyk.onrender.com')}/ws</code></p>
+    </main>
+  </body>
+</html>`);
+});
+
 declare global {
   namespace Express {
     interface Request {
