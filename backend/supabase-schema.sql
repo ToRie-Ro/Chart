@@ -29,6 +29,17 @@ create table if not exists public.device_sessions (
 
 create index if not exists device_sessions_user_idx on public.device_sessions (user_id, last_active_at desc);
 create unique index if not exists device_sessions_refresh_token_idx on public.device_sessions (refresh_token_hash) where refresh_token_hash is not null;
+
+create table if not exists public.email_login_challenges (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  code_hash text not null,
+  expires_at timestamptz not null,
+  attempts integer not null default 0,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists email_login_challenges_user_idx on public.email_login_challenges (user_id, created_at desc);
 create index if not exists users_presence_idx on public.users (is_online, last_seen desc);
 
 create table if not exists public.conversations (

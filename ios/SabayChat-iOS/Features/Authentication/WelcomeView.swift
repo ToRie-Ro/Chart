@@ -9,6 +9,9 @@ struct WelcomeView: View {
     @State private var password = ""
     @State private var message = ""
     @State private var isLoading = false
+    @State private var verificationCode = ""
+    @State private var challengeId: String?
+    @State private var showingCodeEntry = false
     @State private var isAuthenticated = keychainToken() != nil
 
     private enum AuthMode {
@@ -62,6 +65,9 @@ struct WelcomeView: View {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 16) {
+                    if showingCodeEntry {
+                        codeEntryView
+                    } else {
                     Text(mode == .login ? "Login" : "Create account")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(.white)
@@ -78,7 +84,7 @@ struct WelcomeView: View {
                             .padding()
                             .sabayGlass(cornerRadius: 14)
                             .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+                        }
 
                     TextField("Email", text: $email)
                         .focused($focusedField, equals: .email)
@@ -151,6 +157,35 @@ struct WelcomeView: View {
         }
     }
 
+    private var codeEntryView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Check your email").font(.largeTitle.weight(.bold)).foregroundStyle(.white)
+            Text("Enter the 6-digit code we sent to \(email).").foregroundStyle(.white.opacity(0.8))
+            TextField("000000", text: $verificationCode)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .multilineTextAlignment(.center)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding()
+                .sabayGlass(cornerRadius: 14)
+            if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(.white.opacity(0.9)) }
+            Button("Verify and continue") { verifyCode() }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .foregroundStyle(.white)
+                .background(SabayChatColors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .buttonStyle(SabayPrimaryButtonStyle())
+            Button("Use a different account") {
+                showingCodeEntry = false
+                challengeId = nil
+                verificationCode = ""
+                message = ""
+            }.foregroundStyle(.white.opacity(0.8))
+        }
+    }
+
     private func submit() {
         guard !email.isEmpty, !password.isEmpty, mode == .login || !name.isEmpty else {
             message = mode == .login ? "Enter your email and password." : "Enter your name, email, and password."
@@ -174,7 +209,13 @@ struct WelcomeView: View {
             let serverMessage = data.flatMap { try? JSONDecoder().decode(ServerError.self, from: $0) }?.error
             DispatchQueue.main.async {
                 isLoading = false
-                if (200..<300).contains(statusCode) {
+                if statusCode == 202, let data,
+                   let responseBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let challenge = responseBody["challengeId"] as? String {
+                    challengeId = challenge
+                    showingCodeEntry = true
+                    message = "A verification code was sent to your email."
+                } else if (200..<300).contains(statusCode) {
                     message = mode == .login ? "Login successful." : "Account created successfully."
                     UserDefaults.standard.set(true, forKey: "isAuthenticated")
                     if let data, let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = auth["token"] as? String, let user = auth["user"] as? [String: Any] {
@@ -186,6 +227,28 @@ struct WelcomeView: View {
                 } else {
                     message = serverMessage ?? "The server could not complete your request."
                 }
+            }
+        }.resume()
+    }
+
+    private func verifyCode() {
+        guard let challengeId, verificationCode.count == 6 else { message = "Enter the 6-digit code."; return }
+        isLoading = true
+        var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/auth/verify-login-code")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["challengeId": challengeId, "code": verificationCode])
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            DispatchQueue.main.async {
+                isLoading = false
+                guard (200..<300).contains(status), let data,
+                      let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let token = auth["token"] as? String else {
+                    message = "That code is invalid or expired."; return
+                }
+                saveKeychainToken(token)
+                isAuthenticated = true
             }
         }.resume()
     }

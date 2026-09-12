@@ -3,6 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
+import nodemailer from 'nodemailer';
 import { WebSocket, WebSocketServer } from 'ws';
 import { env } from './config/env.js';
 import { supabase } from './config/supabase.js';
@@ -10,6 +11,9 @@ import { supabase } from './config/supabase.js';
 const app = express();
 const activeConnections = new Map<string, number>();
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
+const mailTransport = env.smtpUser && env.smtpPassword && env.emailFrom
+  ? nodemailer.createTransport({ host: env.smtpHost, port: env.smtpPort, secure: env.smtpPort === 465, auth: { user: env.smtpUser, pass: env.smtpPassword } })
+  : null;
 app.set('trust proxy', 1);
 app.use((req, res, next) => {
   const forwardedProtocol = req.header('x-forwarded-proto');
@@ -253,7 +257,40 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  void login(email, password).then((result) => res.status(result.status).json(result.body));
+  void login(email, password).then((result) => res.status(result.status).json(result.body)).catch(() => res.status(500).json({ error: 'Could not start sign-in.' }));
+});
+
+app.post('/api/auth/verify-login-code', async (req, res) => {
+  const challengeId = String(req.body?.challengeId ?? '');
+  const code = String(req.body?.code ?? '').trim();
+  if (!challengeId || !/^\d{6}$/.test(code) || !supabase) return res.status(400).json({ error: 'A valid verification code is required.' });
+  const { data: challenge, error } = await supabase.from('email_login_challenges').select('id, user_id, code_hash, expires_at, attempts').eq('id', challengeId).is('consumed_at', null).maybeSingle();
+  if (error || !challenge) return res.status(401).json({ error: 'This verification code is invalid or expired.' });
+  if (new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= 5) return res.status(401).json({ error: 'This verification code is invalid or expired.' });
+  if (!(await bcrypt.compare(code, challenge.code_hash))) {
+    await supabase.from('email_login_challenges').update({ attempts: challenge.attempts + 1 }).eq('id', challenge.id);
+    return res.status(401).json({ error: 'This verification code is incorrect.' });
+  }
+  const { data: user, error: userError } = await supabase.from('users').select('*').eq('id', challenge.user_id).single();
+  if (userError || !user) return res.status(401).json({ error: 'Account not found.' });
+  await supabase.from('email_login_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challenge.id);
+  const publicAccount = publicUser(user);
+  return res.json({ ...(await createSession(publicAccount.id, 'Mobile device', 'unknown')), user: publicAccount });
+});
+
+app.post('/api/auth/resend-login-code', async (req, res) => {
+  const challengeId = String(req.body?.challengeId ?? '');
+  if (!challengeId || !supabase || !mailTransport || !env.emailFrom) return res.status(400).json({ error: 'Unable to resend verification code.' });
+  const { data: challenge } = await supabase.from('email_login_challenges').select('id, user_id, created_at').eq('id', challengeId).is('consumed_at', null).maybeSingle();
+  if (!challenge || Date.now() - new Date(challenge.created_at).getTime() < 60_000) return res.status(429).json({ error: 'Please wait before requesting another code.' });
+  const { data: user } = await supabase.from('users').select('email').eq('id', challenge.user_id).single();
+  if (!user) return res.status(400).json({ error: 'Unable to resend verification code.' });
+  const code = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
+  await supabase.from('email_login_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challenge.id);
+  const { data: replacement, error } = await supabase.from('email_login_challenges').insert({ user_id: challenge.user_id, code_hash: await bcrypt.hash(code, 12), expires_at: new Date(Date.now() + 10 * 60_000).toISOString() }).select('id').single();
+  if (error || !replacement) return res.status(500).json({ error: 'Unable to resend verification code.' });
+  await mailTransport.sendMail({ from: env.emailFrom, to: user.email, subject: `${env.appName} sign-in code`, text: `Your ${env.appName} sign-in code is ${code}. It expires in 10 minutes.` });
+  return res.status(202).json({ requiresVerification: true, challengeId: replacement.id, expiresIn: 600 });
 });
 
 app.post('/api/auth/register', (req, res) => {
@@ -269,11 +306,25 @@ app.post('/api/auth/register', (req, res) => {
 
 async function login(email: string, password: string) {
   if (!supabase) return { status: 503, body: { error: 'Database is not configured.' } };
+  if (!mailTransport || !env.emailFrom) return { status: 503, body: { error: 'Email delivery is not configured.' } };
   const { data, error } = await supabase.from('users').select('*').eq('email', String(email).trim().toLowerCase()).maybeSingle();
   if (error) return { status: 500, body: { error: 'Database request failed.' } };
   if (!data || !(await bcrypt.compare(password, data.password_hash))) return { status: 401, body: { error: 'Invalid credentials.' } };
-  const user = publicUser(data);
-  return { status: 200, body: { ...(await createSession(user.id, 'Mobile device', 'unknown')), user } };
+  const code = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
+  const { data: challenge, error: challengeError } = await supabase.from('email_login_challenges').insert({
+    user_id: data.id,
+    code_hash: await bcrypt.hash(code, 12),
+    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+  }).select('id').single();
+  if (challengeError || !challenge) return { status: 500, body: { error: 'Could not create verification challenge.' } };
+  await mailTransport.sendMail({
+    from: env.emailFrom,
+    to: String(data.email),
+    subject: `${env.appName} sign-in code`,
+    text: `Your ${env.appName} sign-in code is ${code}. It expires in 10 minutes. If you did not request this, secure your account immediately.`,
+    html: `<p>Your ${env.appName} sign-in code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. If you did not request this, secure your account immediately.</p>`,
+  });
+  return { status: 202, body: { requiresVerification: true, challengeId: challenge.id, expiresIn: 600 } };
 }
 
 async function isConversationMember(conversationId: string, userId: string) {

@@ -23,4 +23,9 @@ export const env = {
   apiBaseUrl: process.env.API_BASE_URL ?? 'https://chart-ztyk.onrender.com',
   premiumLicenseKeys: (process.env.PREMIUM_LICENSE_KEYS ?? '').split(',').map((key) => key.trim()).filter(Boolean),
   allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean),
+  smtpHost: process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpUser: process.env.SMTP_USER ?? '',
+  smtpPassword: process.env.SMTP_PASSWORD ?? '',
+  emailFrom: process.env.EMAIL_FROM ?? '',
 };
