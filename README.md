@@ -75,12 +75,14 @@ The service-role key must only exist in Render environment variables. Never use 
 
 If the original schema was already run, run `backend/supabase-migration-002-conversation-ids.sql` after the main schema. This keeps the existing `conv_1` and `conv_2` app IDs compatible with saved messages. Mobile clients send messages to the API with their login JWT; messages are stored in Supabase and loaded again when the chat opens.
 
-After running the SQL, the API uses Supabase for registration and login. Test the protected profile endpoint with the token returned by login:
+After running the SQL, the API uses Supabase for registration and login. Access tokens are short-lived (15 minutes). Store the returned refresh token only in platform secure storage and rotate it through `POST /api/auth/refresh`; never put either token in logs or URLs. Test the protected profile endpoint with the access token returned by login:
 
 ```text
 GET https://chart-ztyk.onrender.com/api/me
 Authorization: Bearer <login-token>
 ```
+
+The backend validates every protected access token against its active device session. `POST /api/auth/logout` revokes the current device, and `POST /api/me/devices/logout-all` revokes every device. WebSocket clients must use `wss://` and are authorized against conversation membership before messages are stored or delivered.
 
 ## Product goals
 
@@ -113,6 +115,18 @@ Open the Android project in Android Studio and sync Gradle.
 
 GitHub Actions workflows are included for automated Android APK/AAB and iOS IPA generation.
 
+### iOS IPA test build
+
+The iOS project now includes the SabayChart app icon in `ios/SabayChat-iOS/Assets.xcassets` and uses the `com.sabaychart.ios` bundle identifier. On a Mac with Xcode 26 installed:
+
+1. Open `ios/SabayChat-iOS/SabayChat-iOS.xcodeproj`.
+2. Select the `SabayChat-iOS` scheme and a connected iPhone or a generic iOS device.
+3. Set your Apple Developer Team under **Signing & Capabilities** and keep automatic signing enabled for the first test.
+4. Use **Product > Archive**, then **Distribute App > Ad Hoc** for an installable test IPA.
+5. For App Store publication, choose **App Store Connect** instead of Ad Hoc and complete TestFlight review.
+
+The repository cannot produce a signed IPA on Windows because Xcode, the iOS SDK, and Apple code-signing tools only run on macOS. The final archive size must be checked from the Release archive; native SwiftUI code and the single optimized 1024px icon are intentionally lightweight.
+
 ## Security
 
 Never commit secrets, credentials, certificates, keystores, or payment keys. Store them in GitHub Actions Secrets or secure platform key stores.
@@ -120,4 +134,3 @@ Never commit secrets, credentials, certificates, keystores, or payment keys. Sto
 ## License
 
 This project is scaffolded for development and production onboarding. Add your preferred license before distribution.
-

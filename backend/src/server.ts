@@ -2,35 +2,119 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { WebSocketServer } from 'ws';
+import { createHash, randomBytes } from 'node:crypto';
+import { WebSocket, WebSocketServer } from 'ws';
 import { env } from './config/env.js';
 import { supabase } from './config/supabase.js';
-import { mockConversations, mockMessages, mockUsers } from './data/mockData.js';
 
 const app = express();
 const activeConnections = new Map<string, number>();
-app.use(cors());
-app.use(express.json());
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  const forwardedProtocol = req.header('x-forwarded-proto');
+  if (env.environment === 'production' && forwardedProtocol && forwardedProtocol !== 'https') {
+    return res.status(400).json({ error: 'HTTPS is required.' });
+  }
+  return next();
+});
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || env.allowedOrigins.length === 0 || env.allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed.'));
+  },
+  credentials: false,
+}));
+app.use(express.json({ limit: '64kb' }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+app.use('/api', async (req, res, next) => {
+  const key = req.ip ?? 'unknown';
+  const now = Date.now();
+  const current = requestCounts.get(key);
+  if (!current || current.resetAt <= now) requestCounts.set(key, { count: 1, resetAt: now + 60_000 });
+  else if (current.count >= 120) return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  else current.count += 1;
+
+  if (req.path.startsWith('/auth/refresh') || req.path.startsWith('/auth/login') || req.path.startsWith('/auth/register')) return next();
+  const userId = await authenticatedUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Authentication required.' });
+  req.userId = userId;
+  return next();
+});
+
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', app: env.appName, environment: env.environment, database: supabase ? 'configured' : 'not_configured', time: new Date().toISOString() });
 });
 
 app.get('/api/users', (_req, res) => {
-  if (!supabase) return res.json(mockUsers);
-  void supabase.from('users').select('id, name, email, username, bio, avatar_url, is_online, last_seen, locale, role').then(({ data, error }) => {
+  if (!supabase) return res.status(503).json({ error: 'Database is not configured.' });
+  void supabase.from('users').select('id, name, username, bio, avatar_url, is_online, last_seen, locale, role').then(({ data, error }) => {
     if (error) return res.status(500).json({ error: 'Could not load users.' });
     return res.json((data ?? []).map(publicUser));
   });
 });
 
-app.get('/api/me', async (req, res) => {
-  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+app.get('/api/contacts', async (req, res) => {
+  const userId = req.userId;
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data, error } = await supabase.from('users').select('id, name, email, username, bio, avatar_url, is_online, last_seen, locale, role').neq('id', userId).order('is_online', { ascending: false }).order('name');
+  if (error) return res.status(500).json({ error: 'Could not load contacts.' });
+  return res.json((data ?? []).map(publicUser));
+});
 
+app.post('/api/contacts/requests', async (req, res) => {
+  const userId = req.userId;
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data: recipient } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+  if (!recipient || recipient.id === userId) return res.status(404).json({ error: 'Account not found.' });
+  const { error } = await supabase.from('friend_requests').insert({ requester_id: userId, recipient_id: recipient.id });
+  if (error) return res.status(error.code === '23505' ? 409 : 500).json({ error: error.code === '23505' ? 'Friend request already sent.' : 'Could not send friend request.' });
+  return res.status(201).json({ status: 'request_sent' });
+});
+
+app.get('/api/calls', async (req, res) => {
+  const userId = req.userId;
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data, error } = await supabase.from('call_history').select('*').or(`caller_id.eq.${userId},recipient_id.eq.${userId}`).order('started_at', { ascending: false });
+  if (error) return res.status(500).json({ error: 'Could not load call history.' });
+  return res.json(data ?? []);
+});
+
+app.get('/api/settings', async (req, res) => {
+  const userId = req.userId;
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle();
+  if (error) return res.status(500).json({ error: 'Could not load settings.' });
+  return res.json(data ?? { user_id: userId, language: 'en', notifications_enabled: true, sounds_enabled: true, dark_mode: true });
+});
+
+app.patch('/api/settings', async (req, res) => {
+  const userId = req.userId;
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const settings = { user_id: userId, language: req.body?.language === 'km' ? 'km' : 'en', notifications_enabled: req.body?.notificationsEnabled !== false, sounds_enabled: req.body?.soundsEnabled !== false, dark_mode: req.body?.darkMode !== false, updated_at: new Date().toISOString() };
+  const { data, error } = await supabase.from('user_settings').upsert(settings).select('*').single();
+  if (error) return res.status(500).json({ error: 'Could not save settings.' });
+  return res.json(data);
+});
+
+app.get('/api/me', async (req, res) => {
+  if (!supabase || !req.userId) return res.status(401).json({ error: 'Authentication required.' });
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
-    const { data, error } = await supabase.from('users').select('*').eq('id', payload.sub).single();
+    const { data, error } = await supabase.from('users').select('*').eq('id', req.userId).single();
     if (error || !data) return res.status(404).json({ error: 'Account not found.' });
     return res.json({ user: publicUser(data) });
   } catch {
@@ -39,7 +123,7 @@ app.get('/api/me', async (req, res) => {
 });
 
 app.get('/api/me/devices', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const { data, error } = await supabase.from('device_sessions').select('id, device_name, platform, last_active_at, created_at, revoked_at').eq('user_id', userId).is('revoked_at', null).order('last_active_at', { ascending: false });
   if (error) return res.status(500).json({ error: 'Could not load devices.' });
@@ -47,7 +131,7 @@ app.get('/api/me/devices', async (req, res) => {
 });
 
 app.patch('/api/me', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const updates: Record<string, string> = {};
   for (const [key, column] of [['name', 'name'], ['bio', 'bio'], ['avatarUrl', 'avatar_url'], ['phoneNumber', 'phone_number']] as const) {
@@ -60,7 +144,7 @@ app.patch('/api/me', async (req, res) => {
 });
 
 app.post('/api/me/password', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   const currentPassword = String(req.body?.currentPassword ?? '');
   const newPassword = String(req.body?.newPassword ?? '');
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
@@ -77,7 +161,7 @@ app.get('/api/premium/features', (_req, res) => {
 });
 
 app.post('/api/premium/activate', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   const licenseKey = String(req.body?.licenseKey ?? '').trim();
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   if (!licenseKey || !env.premiumLicenseKeys.includes(licenseKey)) return res.status(403).json({ error: 'Invalid premium license key.' });
@@ -87,7 +171,7 @@ app.post('/api/premium/activate', async (req, res) => {
 });
 
 app.post('/api/me/devices', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const deviceName = String(req.body?.deviceName ?? '').trim();
   const platform = String(req.body?.platform ?? '').trim();
@@ -98,7 +182,7 @@ app.post('/api/me/devices', async (req, res) => {
 });
 
 app.get('/api/conversations', async (req, res) => {
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const { data, error } = await supabase.from('conversation_participants').select('conversation_id, conversations(id, name, type, created_at)').eq('user_id', userId);
   if (error) return res.status(500).json({ error: 'Could not load conversations.' });
@@ -110,7 +194,7 @@ app.get('/api/conversations', async (req, res) => {
 
 app.get('/api/messages/:conversationId', async (req, res) => {
   const conversationId = req.params.conversationId;
-  const userId = authenticatedUserId(req);
+  const userId = req.userId;
   if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
   const member = await isConversationMember(conversationId, userId);
   if (!member) return res.status(403).json({ error: 'You are not a member of this conversation.' });
@@ -122,20 +206,15 @@ app.get('/api/messages/:conversationId', async (req, res) => {
 });
 
 app.post('/api/messages/:conversationId', async (req, res) => {
-  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
   const text = String(req.body?.text ?? '').trim();
-  if (!token || !text) return res.status(400).json({ error: 'Authentication and message text are required.' });
+  const userId = req.userId;
+  if (!userId || !text) return res.status(400).json({ error: 'Authentication and message text are required.' });
   if (!supabase) return res.status(503).json({ error: 'Database is not configured.' });
 
-  try {
-    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
-    if (!await isConversationMember(req.params.conversationId, String(payload.sub))) return res.status(403).json({ error: 'You are not a member of this conversation.' });
-    const { data, error } = await supabase.from('messages').insert({ conversation_id: req.params.conversationId, sender_id: payload.sub, text, status: 'sent' }).select('*').single();
-    if (error) return res.status(500).json({ error: 'Could not save message.' });
-    return res.status(201).json(data);
-  } catch {
-    return res.status(401).json({ error: 'Invalid or expired token.' });
-  }
+  if (!await isConversationMember(req.params.conversationId, userId)) return res.status(403).json({ error: 'You are not a member of this conversation.' });
+  const { data, error } = await supabase.from('messages').insert({ conversation_id: req.params.conversationId, sender_id: userId, text, status: 'sent' }).select('*').single();
+  if (error) return res.status(500).json({ error: 'Could not save message.' });
+  return res.status(201).json(data);
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -165,9 +244,7 @@ async function login(email: string, password: string) {
   if (error) return { status: 500, body: { error: 'Database request failed.' } };
   if (!data || !(await bcrypt.compare(password, data.password_hash))) return { status: 401, body: { error: 'Invalid credentials.' } };
   const user = publicUser(data);
-  const token = jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' });
-  await supabase.from('device_sessions').insert({ user_id: user.id, device_name: 'Mobile device', platform: 'unknown' });
-  return { status: 200, body: { token, user } };
+  return { status: 200, body: { ...(await createSession(user.id, 'Mobile device', 'unknown')), user } };
 }
 
 async function isConversationMember(conversationId: string, userId: string) {
@@ -186,9 +263,7 @@ async function register(name: unknown, email: string, password: string) {
     { conversation_id: 'conv_2', user_id: data.id },
   ]);
   const user = publicUser(data);
-  const token = jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' });
-  await supabase.from('device_sessions').insert({ user_id: user.id, device_name: 'Mobile device', platform: 'unknown' });
-  return { status: 201, body: { token, user } };
+  return { status: 201, body: { ...(await createSession(user.id, 'Mobile device', 'unknown')), user } };
 }
 
 function publicUser(user: Record<string, unknown>) {
@@ -200,25 +275,75 @@ async function setPresence(userId: string, isOnline: boolean) {
   await supabase.from('users').update({ is_online: isOnline, last_seen: new Date().toISOString() }).eq('id', userId);
 }
 
-function authenticatedUserId(req: express.Request) {
+async function authenticatedUserId(req: express.Request) {
   const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
   try {
-    return String((jwt.verify(token, env.jwtSecret) as jwt.JwtPayload).sub);
+    const payload = jwt.verify(token, env.jwtSecret, { issuer: env.appName }) as jwt.JwtPayload;
+    if (typeof payload.sub !== 'string' || typeof payload.sid !== 'string' || !supabase) return null;
+    const { data } = await supabase.from('device_sessions').select('user_id').eq('id', payload.sid).is('revoked_at', null).eq('user_id', payload.sub).maybeSingle();
+    return data ? payload.sub : null;
   } catch {
     return null;
   }
 }
+
+function hashToken(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+async function createSession(userId: string, deviceName: string, platform: string) {
+  if (!supabase) throw new Error('Database is not configured.');
+  const refreshToken = randomBytes(48).toString('base64url');
+  const { data, error } = await supabase.from('device_sessions').insert({
+    user_id: userId,
+    device_name: deviceName,
+    platform,
+    refresh_token_hash: hashToken(refreshToken),
+  }).select('id').single();
+  if (error || !data) throw new Error('Could not create device session.');
+  const accessToken = jwt.sign({ sub: userId, sid: data.id }, env.jwtSecret, { expiresIn: '15m', issuer: env.appName });
+  return { token: accessToken, accessToken, refreshToken, expiresIn: 900 };
+}
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const refreshToken = String(req.body?.refreshToken ?? '');
+  if (!refreshToken || !supabase) return res.status(401).json({ error: 'Invalid refresh token.' });
+  const { data: session } = await supabase.from('device_sessions').select('id, user_id').eq('refresh_token_hash', hashToken(refreshToken)).is('revoked_at', null).maybeSingle();
+  if (!session) return res.status(401).json({ error: 'Invalid refresh token.' });
+  const nextRefreshToken = randomBytes(48).toString('base64url');
+  const { error } = await supabase.from('device_sessions').update({ refresh_token_hash: hashToken(nextRefreshToken), last_active_at: new Date().toISOString() }).eq('id', session.id);
+  if (error) return res.status(500).json({ error: 'Could not rotate refresh token.' });
+  const accessToken = jwt.sign({ sub: session.user_id, sid: session.id }, env.jwtSecret, { expiresIn: '15m', issuer: env.appName });
+  return res.json({ token: accessToken, accessToken, refreshToken: nextRefreshToken, expiresIn: 900 });
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  if (!req.userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  const payload = token ? jwt.decode(token) as jwt.JwtPayload | null : null;
+  if (payload?.sid) await supabase.from('device_sessions').update({ revoked_at: new Date().toISOString(), refresh_token_hash: null }).eq('id', payload.sid).eq('user_id', req.userId);
+  return res.status(204).send();
+});
+
+app.post('/api/me/devices/logout-all', async (req, res) => {
+  if (!req.userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const { error } = await supabase.from('device_sessions').update({ revoked_at: new Date().toISOString(), refresh_token_hash: null }).eq('user_id', req.userId).is('revoked_at', null);
+  if (error) return res.status(500).json({ error: 'Could not end device sessions.' });
+  return res.status(204).send();
+});
 
 const server = app.listen(env.port, () => {
   console.log(`${env.appName} backend running on port ${env.port}`);
 });
 
 const wss = new WebSocketServer({ noServer: true });
+const connectionUsers = new Map<WebSocket, string>();
 
-server.on('upgrade', (request, socket, head) => {
+server.on('upgrade', async (request, socket, head) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
-  if (url.pathname !== '/ws' || !verifyToken(url.searchParams.get('token'))) {
+  const userId = await verifyWebSocketToken(url.searchParams.get('token'));
+  if (url.pathname !== '/ws' || !userId) {
     socket.destroy();
     return;
   }
@@ -229,6 +354,7 @@ wss.on('connection', (ws, request) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const userId = verifyToken(url.searchParams.get('token'));
   if (!userId) return ws.close(1008, 'Authentication required.');
+  connectionUsers.set(ws, userId);
   activeConnections.set(userId, (activeConnections.get(userId) ?? 0) + 1);
   void setPresence(userId, true);
   const heartbeat = setInterval(() => void setPresence(userId, true), 30_000);
@@ -236,20 +362,29 @@ wss.on('connection', (ws, request) => {
   ws.on('message', (raw) => {
     try {
       const message = JSON.parse(raw.toString());
-      if (typeof message.conversationId !== 'string' || typeof message.text !== 'string' || !message.text.trim()) return;
-      const payload = { ...message, senderId: userId, text: message.text.trim() };
-      void supabase?.from('messages').insert({ conversation_id: payload.conversationId, sender_id: userId, text: payload.text, status: 'sent' });
-      wss.clients.forEach((client) => {
-        if (client.readyState === 1 && client !== ws) {
-          client.send(JSON.stringify({ type: 'message', payload }));
+      if (typeof message.conversationId !== 'string' || typeof message.text !== 'string' || !message.text.trim() || message.text.length > 4000 || !supabase) return;
+      void (async () => {
+        if (!await isConversationMember(message.conversationId, userId)) {
+          ws.send(JSON.stringify({ type: 'error', payload: { error: 'You are not a member of this conversation.' } }));
+          return;
         }
-      });
+        const { data, error } = await supabase.from('messages').insert({ conversation_id: message.conversationId, sender_id: userId, text: message.text.trim(), status: 'sent' }).select('*').single();
+        if (error || !data) {
+          ws.send(JSON.stringify({ type: 'error', payload: { error: 'Could not save message.' } }));
+          return;
+        }
+        const serialized = JSON.stringify({ type: 'message', payload: data });
+        for (const [client, clientUserId] of connectionUsers) {
+          if (client.readyState === WebSocket.OPEN && await isConversationMember(message.conversationId, clientUserId)) client.send(serialized);
+        }
+      })().catch((error: unknown) => console.error('WebSocket message handling failed', error));
     } catch (error) {
       console.error('Failed to parse websocket message', error);
     }
   });
 
   ws.on('close', () => {
+    connectionUsers.delete(ws);
     clearInterval(heartbeat);
     const remaining = (activeConnections.get(userId) ?? 1) - 1;
     if (remaining <= 0) {
@@ -266,8 +401,20 @@ wss.on('connection', (ws, request) => {
 function verifyToken(token: string | null) {
   if (!token) return null;
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    const payload = jwt.verify(token, env.jwtSecret, { issuer: env.appName }) as jwt.JwtPayload;
     return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyWebSocketToken(token: string | null) {
+  if (!token || !supabase) return null;
+  try {
+    const payload = jwt.verify(token, env.jwtSecret, { issuer: env.appName }) as jwt.JwtPayload;
+    if (typeof payload.sub !== 'string' || typeof payload.sid !== 'string') return null;
+    const { data } = await supabase.from('device_sessions').select('user_id').eq('id', payload.sid).eq('user_id', payload.sub).is('revoked_at', null).maybeSingle();
+    return data ? payload.sub : null;
   } catch {
     return null;
   }

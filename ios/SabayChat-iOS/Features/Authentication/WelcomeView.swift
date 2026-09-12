@@ -32,12 +32,8 @@ struct WelcomeView: View {
 
     private var authenticationView: some View {
         ZStack {
-            LinearGradient(
-                colors: [SabayChatColors.primary, SabayChatColors.primaryDark],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LinearGradient(colors: [SabayChatColors.primaryDark, SabayChatColors.background], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
+            SabayChatBackground()
 
             ScrollView {
                 VStack(alignment: .center, spacing: 20) {
@@ -45,13 +41,14 @@ struct WelcomeView: View {
 
                 VStack(spacing: 12) {
                     Circle()
-                        .frame(width: 72, height: 72)
-                        .foregroundStyle(.white.opacity(0.2))
+                        .frame(width: 78, height: 78)
+                        .foregroundStyle(.white.opacity(0.16))
                         .overlay(
                             Image(systemName: "bubble.left.fill")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundStyle(.white)
                         )
+                        .shadow(color: .white.opacity(0.18), radius: 20)
 
                         Text("SabayChart")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -79,8 +76,8 @@ struct WelcomeView: View {
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
                             .padding()
-                            .background(.white.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .sabayGlass(cornerRadius: 14)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
                     TextField("Email", text: $email)
@@ -90,15 +87,13 @@ struct WelcomeView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding()
-                        .background(.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .sabayGlass(cornerRadius: 14)
 
                     SecureField("Password", text: $password)
                         .focused($focusedField, equals: .password)
                         .textContentType(mode == .login ? .password : .newPassword)
                         .padding()
-                        .background(.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .sabayGlass(cornerRadius: 14)
 
                     if !message.isEmpty {
                         Text(message)
@@ -107,37 +102,39 @@ struct WelcomeView: View {
                     }
 
                     Button(action: submit) {
-                        Text(isLoading ? "Please wait..." : (mode == .login ? "Login" : "Create account"))
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .foregroundStyle(.white)
-                            .font(.headline)
-                            .background(.white.opacity(0.18))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        HStack {
+                            Spacer()
+                            if isLoading { ProgressView().tint(.white) }
+                            Text(isLoading ? "Please wait..." : (mode == .login ? "Login" : "Create account"))
+                            Image(systemName: "arrow.right")
+                            Spacer()
+                        }
+                        .padding()
+                        .foregroundStyle(.white)
+                        .font(.headline)
+                        .background(SabayChatColors.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .disabled(isLoading)
+                    .buttonStyle(SabayPrimaryButtonStyle())
 
                     Button {
-                        mode = mode == .login ? .register : .login
-                        message = ""
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                            mode = mode == .login ? .register : .login
+                            message = ""
+                        }
                     } label: {
                         Text(mode == .login ? "Create account" : "Back to login")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .foregroundStyle(.white)
                             .font(.headline)
-                            .background(.white.opacity(0.18))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .sabayGlass(cornerRadius: 14)
                     }
                 }
                 .padding(24)
                 .frame(maxWidth: 380)
-                .background(Color.white.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
+                .sabayGlass(cornerRadius: 24)
 
                 Spacer(minLength: 20)
                 }
