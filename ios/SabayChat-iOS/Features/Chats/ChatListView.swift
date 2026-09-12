@@ -61,9 +61,11 @@ private struct ProfileView: View {
             ZStack {
                 SabayChatColors.background.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 14) {
-                    ZStack { Circle().fill(SabayChatColors.primary); Text("DR").font(.title.bold()).foregroundStyle(.white) }.frame(width: 88, height: 88)
-                    Text("Your profile").font(.title.bold()).foregroundStyle(.white)
-                    Text("Signed-in account").foregroundStyle(SabayChatColors.textSecondary)
+                    let name = UserDefaults.standard.string(forKey: "profileName") ?? "Your profile"
+                    let email = UserDefaults.standard.string(forKey: "profileEmail") ?? "Signed-in account"
+                    ZStack { Circle().fill(SabayChatColors.primary); Text(String(name.prefix(2)).uppercased()).font(.title.bold()).foregroundStyle(.white) }.frame(width: 88, height: 88)
+                    Text(name).font(.title.bold()).foregroundStyle(.white)
+                    Text(email).foregroundStyle(SabayChatColors.textSecondary)
                     Divider().overlay(SabayChatColors.border)
                     Label("Account is connected to SabayChart", systemImage: "checkmark.seal.fill").foregroundStyle(SabayChatColors.success)
                     Spacer()
@@ -90,5 +92,5 @@ struct ConversationView: View {
     }
     private func bubble(_ text: String, mine: Bool) -> some View { Text(text).foregroundStyle(.white).padding(12).background(mine ? SabayChatColors.primary : SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 16)) }
     private func load() async { guard let url = URL(string: "https://chart-ztyk.onrender.com/api/messages/\(conversation.id)"), let (data, _) = try? await URLSession.shared.data(from: url) else { return }; messages = (try? JSONDecoder().decode([Message].self, from: data)) ?? [] }
-    private func send() { guard !draft.trimmingCharacters(in: .whitespaces).isEmpty else { return }; messages.append(Message(id: UUID().uuidString, conversationId: conversation.id, senderId: "user_1", text: draft, createdAt: ISO8601DateFormatter().string(from: Date()), status: "sending")); draft = ""; focused = false }
+    private func send() { let text = draft.trimmingCharacters(in: .whitespaces); guard !text.isEmpty, let url = URL(string: "https://chart-ztyk.onrender.com/api/messages/\(conversation.id)") else { return }; var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type"); if let token = UserDefaults.standard.string(forKey: "authToken") { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; request.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text]); URLSession.shared.dataTask(with: request) { data, response, _ in guard (response as? HTTPURLResponse)?.statusCode == 201, let data, let saved = try? JSONDecoder().decode(Message.self, from: data) else { return }; DispatchQueue.main.async { messages.append(saved) } }.resume(); draft = ""; focused = false }
 }

@@ -29,6 +29,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bell
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -62,7 +69,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot() {
     var authenticated by remember { mutableStateOf(false) }
-    var profile by remember { mutableStateOf(UserProfile("Da Rea", "darea@sabaychat.app")) }
+    var profile by remember { mutableStateOf(UserProfile("Da Rea", "darea@sabaychat.app", "")) }
     if (authenticated) ChatHome(profile, onLogout = { authenticated = false })
     else AuthScreen { user -> profile = user; authenticated = true }
 }
@@ -118,14 +125,14 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Chat?>(null) }
     LaunchedEffect(Unit) { try { chats = loadChats() } catch (_: Exception) { error = "Cannot connect to the server." }; loading = false }
-    if (selected != null) { ConversationScreen(selected!!, onBack = { selected = null }); return }
+    if (selected != null) { ConversationScreen(selected!!, profile.token, onBack = { selected = null }); return }
     if (showProfile) ProfileScreen(profile, onBack = { showProfile = false }, onLogout = onLogout)
     else Column(Modifier.fillMaxSize().background(Navy)) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Text("KH", color = Color.White, modifier = Modifier.background(Blue, CircleShape).padding(8.dp)); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Text("●", color = Color.White) } }
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Text("SabayChart", color = Color.White, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.weight(1f)); Icon(Icons.Default.Bell, "Notifications", tint = Color.White); Spacer(Modifier.width(12.dp)); IconButton(onClick = { showProfile = true }) { Icon(Icons.Default.Person, "Profile", tint = Color.White) } }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill("All Chats", true); Pill("Personal", false); Pill("Groups", false) }
         Field(search, { search = it }, "Search chats, groups, and people...", KeyboardType.Text, ImeAction.Search)
         when { loading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(32.dp), color = Blue); error.isNotEmpty() -> Text(error, color = Color.White, modifier = Modifier.padding(20.dp)); else -> LazyColumn(Modifier.weight(1f)) { items(chats.filter { it.name.contains(search, true) }) { chat -> ChatRow(chat) { selected = chat } } } }
-        Row(Modifier.fillMaxWidth().background(Color(0xFF111C2D)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceAround) { Text("Chats", color = Blue); Text("Contacts", color = Muted); Text("Calls", color = Muted); Text("Settings", color = Muted) }
+        Row(Modifier.fillMaxWidth().background(Color(0xFF111C2D)).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceAround) { Icon(Icons.Default.ChatBubble, "Chats", tint = Blue); Icon(Icons.Default.Person, "Contacts", tint = Muted); Icon(Icons.Default.Phone, "Calls", tint = Muted); Icon(Icons.Default.Settings, "Settings", tint = Muted) }
     }
 }
 
@@ -134,12 +141,12 @@ private fun ChatHome(profile: UserProfile, onLogout: () -> Unit) {
 
 @Composable private fun ProfileScreen(profile: UserProfile, onBack: () -> Unit, onLogout: () -> Unit) { Column(Modifier.fillMaxSize().background(Navy).padding(24.dp)) { TextButton(onClick = onBack) { Text("Back", color = Blue) }; Spacer(Modifier.height(24.dp)); Text("Profile", color = Color.White, style = MaterialTheme.typography.headlineLarge); Spacer(Modifier.height(24.dp)); Text(profile.name, color = Color.White, style = MaterialTheme.typography.headlineSmall); Text(profile.email, color = Muted); Spacer(Modifier.height(24.dp)); Text("Account details", color = Muted); Spacer(Modifier.height(8.dp)); Text("Online", color = Color(0xFF52D39B)); Spacer(Modifier.height(32.dp)); Button(onClick = onLogout) { Text("Log out") } } }
 
-@Composable private fun ConversationScreen(chat: Chat, onBack: () -> Unit) { var draft by remember { mutableStateOf("") }; val keyboard = LocalSoftwareKeyboardController.current; Column(Modifier.fillMaxSize().background(Navy)) { TextButton(onClick = onBack) { Text("‹  ${chat.name}", color = Color.White) }; Column(Modifier.weight(1f).padding(20.dp)) { Text(chat.message, color = Color.White, modifier = Modifier.background(Color(0xFF18253A), RoundedCornerShape(16.dp)).padding(12.dp)) }; Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Field(draft, { draft = it }, "Type a message...", KeyboardType.Text, ImeAction.Done, keyboard = keyboard); Spacer(Modifier.width(8.dp)); Button(onClick = { keyboard?.hide(); draft = "" }) { Text("Send") } } } }
+@Composable private fun ConversationScreen(chat: Chat, token: String, onBack: () -> Unit) { var draft by remember { mutableStateOf("") }; var sent by remember { mutableStateOf("") }; val keyboard = LocalSoftwareKeyboardController.current; val scope = rememberCoroutineScope(); Column(Modifier.fillMaxSize().background(Navy)) { TextButton(onClick = onBack) { Text("‹  ${chat.name}", color = Color.White) }; Column(Modifier.weight(1f).padding(20.dp)) { Text(chat.message, color = Color.White, modifier = Modifier.background(Color(0xFF18253A), RoundedCornerShape(16.dp)).padding(12.dp)); if (sent.isNotEmpty()) Text(sent, color = Color.White, modifier = Modifier.padding(top = 12.dp).background(Blue, RoundedCornerShape(16.dp)).padding(12.dp)) }; Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Field(draft, { draft = it }, "Type a message...", KeyboardType.Text, ImeAction.Done, keyboard = keyboard); Spacer(Modifier.width(8.dp)); Button(onClick = { val text = draft.trim(); if (text.isNotEmpty()) { keyboard?.hide(); sent = text; draft = ""; scope.launch { request("/api/messages/${chat.id}", "{\"text\":\"${text.jsonEscape()}\"}", token) } } }) { Text("Send") } } } }
 
-data class UserProfile(val name: String, val email: String)
-data class Chat(val name: String, val message: String)
+data class UserProfile(val name: String, val email: String, val token: String)
+data class Chat(val id: String, val name: String, val message: String)
 
-private suspend fun authenticate(register: Boolean, name: String, email: String, password: String): Pair<UserProfile?, String?> = withContext(Dispatchers.IO) { if (email.isBlank() || password.isBlank() || (register && name.isBlank())) return@withContext null to "Complete all fields."; if (register && password.length < 6) return@withContext null to "Password must be at least 6 characters."; val response = request("/api/auth/${if (register) "register" else "login"}", "{\"name\":\"${name.jsonEscape()}\",\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}"); if (response.first in 200..299) UserProfile(if (register) name else email.substringBefore("@"), email) to null else null to "Server error (${response.first})." }
-private suspend fun loadChats(): List<Chat> = withContext(Dispatchers.IO) { val response = request("/api/conversations", null); if (response.first !in 200..299) throw IllegalStateException(); val array = JSONArray(response.second); List(array.length()) { val item = array.getJSONObject(it); Chat(item.optString("name", "Conversation"), item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet") } }
-private fun request(path: String, body: String?): Pair<Int, String> { val connection = URL(API_BASE_URL + path).openConnection() as HttpURLConnection; return try { connection.requestMethod = if (body == null) "GET" else "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000; if (body != null) { connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json"); connection.outputStream.use { it.write(body.toByteArray()) } }; val responseCode = connection.responseCode; val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream; responseCode to (stream?.bufferedReader()?.use { it.readText() } ?: "") } finally { connection.disconnect() } }
+private suspend fun authenticate(register: Boolean, name: String, email: String, password: String): Pair<UserProfile?, String?> = withContext(Dispatchers.IO) { if (email.isBlank() || password.isBlank() || (register && name.isBlank())) return@withContext null to "Complete all fields."; if (register && password.length < 6) return@withContext null to "Password must be at least 6 characters."; val response = request("/api/auth/${if (register) "register" else "login"}", "{\"name\":\"${name.jsonEscape()}\",\"email\":\"${email.jsonEscape()}\",\"password\":\"${password.jsonEscape()}\"}"); if (response.first in 200..299) { val json = JSONObject(response.second); val user = json.getJSONObject("user"); UserProfile(user.optString("name"), user.optString("email"), json.optString("token")) to null } else null to "Server error (${response.first})." }
+private suspend fun loadChats(): List<Chat> = withContext(Dispatchers.IO) { val response = request("/api/conversations", null); if (response.first !in 200..299) throw IllegalStateException(); val array = JSONArray(response.second); List(array.length()) { val item = array.getJSONObject(it); Chat(item.optString("id"), item.optString("name", "Conversation"), item.optJSONObject("lastMessage")?.optString("text") ?: "No messages yet") } }
+private suspend fun request(path: String, body: String?, token: String? = null): Pair<Int, String> = withContext(Dispatchers.IO) { val connection = URL(API_BASE_URL + path).openConnection() as HttpURLConnection; try { connection.requestMethod = if (body == null) "GET" else "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000; token?.let { connection.setRequestProperty("Authorization", "Bearer $it") }; if (body != null) { connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json"); connection.outputStream.use { it.write(body.toByteArray()) } }; val responseCode = connection.responseCode; val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream; responseCode to (stream?.bufferedReader()?.use { it.readText() } ?: "") } finally { connection.disconnect() } }
 private fun String.jsonEscape() = replace("\\", "\\\\").replace("\"", "\\\"")

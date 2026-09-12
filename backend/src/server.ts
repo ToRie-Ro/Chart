@@ -37,10 +37,30 @@ app.get('/api/conversations', (_req, res) => {
   res.json(mockConversations);
 });
 
-app.get('/api/messages/:conversationId', (req, res) => {
+app.get('/api/messages/:conversationId', async (req, res) => {
   const conversationId = req.params.conversationId;
+  if (supabase) {
+    const { data, error } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+    if (!error) return res.json(data);
+  }
   const messages = mockMessages.filter((message) => message.conversationId === conversationId);
   res.json(messages);
+});
+
+app.post('/api/messages/:conversationId', async (req, res) => {
+  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  const text = String(req.body?.text ?? '').trim();
+  if (!token || !text) return res.status(400).json({ error: 'Authentication and message text are required.' });
+  if (!supabase) return res.status(503).json({ error: 'Database is not configured.' });
+
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    const { data, error } = await supabase.from('messages').insert({ conversation_id: req.params.conversationId, sender_id: payload.sub, text, status: 'sent' }).select('*').single();
+    if (error) return res.status(500).json({ error: 'Could not save message.' });
+    return res.status(201).json(data);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token.' });
+  }
 });
 
 app.post('/api/auth/login', (req, res) => {

@@ -73,6 +73,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 
 The service-role key must only exist in Render environment variables. Never use it in iOS, Android, browser code, or Git.
 
+If the original schema was already run, run `backend/supabase-migration-002-conversation-ids.sql` after the main schema. This keeps the existing `conv_1` and `conv_2` app IDs compatible with saved messages. Mobile clients send messages to the API with their login JWT; messages are stored in Supabase and loaded again when the chat opens.
+
 After running the SQL, the API uses Supabase for registration and login. Test the protected profile endpoint with the token returned by login:
 
 ```text

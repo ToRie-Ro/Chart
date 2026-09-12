@@ -179,6 +179,11 @@ struct WelcomeView: View {
                 if (200..<300).contains(statusCode) {
                     message = mode == .login ? "Login successful." : "Account created successfully."
                     UserDefaults.standard.set(true, forKey: "isAuthenticated")
+                    if let data, let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = auth["token"] as? String, let user = auth["user"] as? [String: Any] {
+                        UserDefaults.standard.set(token, forKey: "authToken")
+                        UserDefaults.standard.set(user["name"] as? String, forKey: "profileName")
+                        UserDefaults.standard.set(user["email"] as? String, forKey: "profileEmail")
+                    }
                     isAuthenticated = true
                 } else {
                     message = serverMessage ?? "The server could not complete your request."
