@@ -340,15 +340,38 @@ async function isConversationMember(conversationId: string, userId: string) {
 
 async function register(name: unknown, email: string, password: string) {
   if (!supabase) return { status: 503, body: { error: 'Database is not configured.' } };
+  if (!mailTransport || !env.emailFrom) return { status: 503, body: { error: 'Email delivery is not configured.' } };
   const username = email.split('@')[0].replace(/[^a-z0-9_]/g, '') || `user_${Date.now()}`;
   const { data, error } = await supabase.from('users').insert({ name: String(name).trim(), email, username, password_hash: await bcrypt.hash(password, 12) }).select('*').single();
   if (error) return { status: error.code === '23505' ? 409 : 500, body: { error: error.code === '23505' ? 'An account with this email already exists.' : 'Could not create account.' } };
-  await supabase.from('conversation_participants').insert([
+  const { error: participantError } = await supabase.from('conversation_participants').insert([
     { conversation_id: 'conv_1', user_id: data.id },
     { conversation_id: 'conv_2', user_id: data.id },
   ]);
-  const user = publicUser(data);
-  return { status: 201, body: { ...(await createSession(user.id, 'Mobile device', 'unknown')), user } };
+  if (participantError) {
+    console.error('Registration conversation setup failed:', participantError.message);
+    await supabase.from('users').delete().eq('id', data.id);
+    return { status: 500, body: { error: 'Could not finish account setup. Please try again.' } };
+  }
+  const code = String(randomBytes(4).readUInt32BE(0) % 1_000_000).padStart(6, '0');
+  const { data: challenge, error: challengeError } = await supabase.from('email_login_challenges').insert({
+    user_id: data.id,
+    code_hash: await bcrypt.hash(code, 12),
+    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+  }).select('id').single();
+  if (challengeError || !challenge) {
+    console.error('Registration verification setup failed:', challengeError?.message ?? 'No challenge returned.');
+    await supabase.from('users').delete().eq('id', data.id);
+    return { status: 500, body: { error: 'Could not create email verification request.' } };
+  }
+  await mailTransport.sendMail({
+    from: env.emailFrom,
+    to: email,
+    subject: `${env.appName} account verification code`,
+    text: `Your ${env.appName} verification code is ${code}. It expires in 10 minutes.`,
+    html: `<p>Your ${env.appName} verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes.</p>`,
+  });
+  return { status: 202, body: { requiresVerification: true, challengeId: challenge.id, expiresIn: 600 } };
 }
 
 function publicUser(user: Record<string, unknown>) {

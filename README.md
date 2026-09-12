@@ -75,11 +75,11 @@ SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 
 The service-role key must only exist in Render environment variables. Never use it in iOS, Android, browser code, or Git.
 
-If the original schema was already run, run `backend/supabase-migration-002-conversation-ids.sql` after the main schema. This keeps the existing `conv_1` and `conv_2` app IDs compatible with saved messages. Mobile clients send messages to the API with their login JWT; messages are stored in Supabase and loaded again when the chat opens.
+If the original schema was already run, run `backend/supabase-migration-002-conversation-ids.sql` after the main schema. This keeps the existing `conv_1` and `conv_2` app IDs compatible with saved messages. The `conversations` and `conversation_participants` tables are required for the chat list; creating only `device_sessions` is not enough. Mobile clients send messages to the API with their login JWT; messages are stored in Supabase and loaded again when the chat opens.
 
 ### Email verification login
 
-Password login sends a six-digit code by email before creating a device session. In Render, add all of these environment variables and redeploy:
+Registration and password login send a six-digit code by email before creating a device session. In Render, add all of these environment variables and redeploy:
 
 ```text
 SMTP_HOST=smtp-relay.brevo.com
