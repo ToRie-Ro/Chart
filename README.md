@@ -103,7 +103,7 @@ npm run dev
 
 ### iOS
 
-Open the Xcode project in `ios/SabayChat-iOS` and build with Xcode 15+ / iOS 17+.
+Open the Xcode project in `ios/SabayChat-iOS` and build with the Xcode release that provides the iOS 26 SDK. The deployment target is iOS 26.0, so the app also runs on later compatible iOS releases such as iOS 27.
 
 ### Android
 

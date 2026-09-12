@@ -40,7 +40,7 @@
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		E10000000000000000000002 /* Project object */ = {isa = PBXProject; attributes = { LastUpgradeCheck = 1540; ORGANIZATIONNAME = SabayChat; TargetAttributes = { E10000000000000000000001 = { CreatedOnToolsVersion = 15.4; }; }; }; buildConfigurationList = F10000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = ( en, Base, ); mainGroup = D10000000000000000000001; productRefGroup = D10000000000000000000007; projectDirPath = ""; projectRoot = ""; targets = ( E10000000000000000000001, ); };
+		E10000000000000000000002 /* Project object */ = {isa = PBXProject; attributes = { LastUpgradeCheck = 2600; ORGANIZATIONNAME = SabayChat; TargetAttributes = { E10000000000000000000001 = { CreatedOnToolsVersion = 26.0; }; }; }; buildConfigurationList = F10000000000000000000001; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = ( en, Base, ); mainGroup = D10000000000000000000001; productRefGroup = D10000000000000000000007; projectDirPath = ""; projectRoot = ""; targets = ( E10000000000000000000001, ); };
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -50,8 +50,8 @@
 /* Begin XCBuildConfiguration section */
 		F20000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
 		F20000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
-		F20000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychart.ios; PRODUCT_NAME = SabayChart; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		F20000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychart.ios; PRODUCT_NAME = SabayChart; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		F20000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychart.ios; PRODUCT_NAME = SabayChart; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		F20000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.sabaychart.ios; PRODUCT_NAME = SabayChart; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
