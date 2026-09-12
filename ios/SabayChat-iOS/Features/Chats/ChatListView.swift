@@ -15,6 +15,8 @@ struct ChatListView: View {
     @State private var showContent = false
     @State private var showNotifications = false
     @State private var showNewChat = false
+    @State private var isSearchExpanded = false
+    @FocusState private var searchFocused: Bool
 
     private var filtered: [Conversation] {
         let byFilter = selectedFilter == "All" ? conversations : conversations.filter { selectedFilter == "Groups" ? $0.type == "group" || $0.type == "channel" : $0.type == "direct" }
@@ -32,30 +34,41 @@ struct ChatListView: View {
                 SabayChatBackground()
                 VStack(spacing: 0) {
                     if selectedTab == "Chats" {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Good to see you").font(.caption).foregroundStyle(SabayChatColors.textSecondary)
-                                Text("SabayChart").font(.title2.bold()).foregroundStyle(.white)
+                        HStack(spacing: 12) {
+                            if isSearchExpanded {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary)
+                                    TextField("Search chats", text: $search).focused($searchFocused).foregroundStyle(.white).tint(SabayChatColors.primary)
+                                    Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { search = ""; isSearchExpanded = false; searchFocused = false } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(SabayChatColors.textSecondary) }.buttonStyle(.plain)
+                                }.padding(12).sabayGlass(cornerRadius: 15)
+                            } else {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Good to see you").font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+                                    Text("SabayChart").font(.title2.bold()).foregroundStyle(.white)
+                                }
+                                Spacer()
+                                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { isSearchExpanded = true; searchFocused = true } } label: { Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(.white).frame(width: 40, height: 40).background(.white.opacity(0.08)).clipShape(Circle()) }.buttonStyle(.plain)
                             }
-                            Spacer()
-                            HStack(spacing: 6) {
-                                Circle().fill(serverOnline ? SabayChatColors.success : .red).frame(width: 7, height: 7).scaleEffect(pulse ? 1.35 : 1)
-                                Text(serverOnline ? "Live" : "Offline").font(.caption2).foregroundStyle(SabayChatColors.textSecondary)
+                            if !isSearchExpanded {
+                                HStack(spacing: 6) {
+                                    Circle().fill(serverOnline ? SabayChatColors.success : .red).frame(width: 7, height: 7).scaleEffect(pulse ? 1.35 : 1)
+                                    Text(serverOnline ? "Live" : "Offline").font(.caption2).foregroundStyle(SabayChatColors.textSecondary)
+                                }.padding(.horizontal, 10).padding(.vertical, 7).background(.white.opacity(0.08)).clipShape(Capsule())
+                                Button { showNotifications = true } label: { Image(systemName: "bell.badge").font(.title3).foregroundStyle(.white) }.buttonStyle(.plain)
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(.white.opacity(0.08)).clipShape(Capsule())
-                            Button { showNotifications = true } label: { Image(systemName: "bell.badge").font(.title3).foregroundStyle(.white) }.buttonStyle(.plain)
                         }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
                         HStack(spacing: 8) {
                             filterButton("All", icon: "bubble.left.and.bubble.right.fill")
                             filterButton("Personal", icon: "person.fill")
                             filterButton("Groups", icon: "person.3.fill")
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 12)
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary)
-                            TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary)
-                            if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(SabayChatColors.textSecondary) }.buttonStyle(.plain) }
-                        }.padding(13).sabayGlass(cornerRadius: 14).padding(.horizontal, 20).padding(.bottom, 8)
+                        if !isSearchExpanded {
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary)
+                                TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary)
+                                if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(SabayChatColors.textSecondary) }.buttonStyle(.plain) }
+                            }.padding(13).sabayGlass(cornerRadius: 14).padding(.horizontal, 20).padding(.bottom, 8)
+                        }
                         if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
                         else if !error.isEmpty { state(title: "Could not load chats", detail: error); if error.contains("session") { Button("Log in again") { onSignOut() }.buttonStyle(.borderedProminent) } }
                         else if filtered.isEmpty { state(title: "No chats yet", detail: "Start a conversation to see it here.") }
@@ -75,7 +88,6 @@ struct ChatListView: View {
                     } else {
                         UtilityView(title: selectedTab)
                     }
-                    HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(.ultraThinMaterial)
                 }
                 if selectedTab == "Chats" {
                     VStack {
@@ -88,7 +100,9 @@ struct ChatListView: View {
                         }
                     }
                 }
-            }.task { await load(); await checkServer(); connectPresence(); pulse = true; withAnimation { showContent = true } }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+            .task { await load(); await checkServer(); connectPresence(); pulse = true; withAnimation { showContent = true } }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
             .sheet(isPresented: $showNotifications) { NotificationCenterView() }
             .sheet(isPresented: $showNewChat) { NewChatView() }
         }.preferredColorScheme(.dark)
@@ -100,6 +114,19 @@ struct ChatListView: View {
             VStack(alignment: .leading, spacing: 5) { Text(item.name ?? "Conversation").font(.headline).foregroundStyle(.white); Text(item.lastMessage?.text ?? "No messages yet").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary).lineLimit(1) }
             Spacer(); VStack(alignment: .trailing, spacing: 7) { Text(String(item.updatedAt.split(separator: "T").last?.prefix(5) ?? "")).font(.caption).foregroundStyle(SabayChatColors.textSecondary); Image(systemName: "chevron.right").font(.caption2).foregroundStyle(SabayChatColors.textSecondary) }
         }.padding(14).sabayGlass(cornerRadius: 18)
+    }
+    private var bottomBar: some View {
+        HStack(spacing: 4) {
+            tab("person.2.fill", "Contacts", selectedTab == "Contacts")
+            tab("phone.fill", "Calls", selectedTab == "Calls")
+            tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats")
+            tab("gearshape.fill", "Settings", selectedTab == "Settings")
+        }
+        .padding(.horizontal, 8).padding(.vertical, 9)
+        .background(.ultraThinMaterial.opacity(0.96))
+        .sabayGlass(cornerRadius: 28)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 5)
     }
     private func filterButton(_ title: String, icon: String) -> some View { Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selectedFilter = title } } label: { Label(title, systemImage: icon).font(.caption.bold()).foregroundStyle(selectedFilter == title ? .white : SabayChatColors.textSecondary).padding(.horizontal, 12).padding(.vertical, 8).background(selectedFilter == title ? SabayChatColors.primary : SabayChatColors.surface).clipShape(Capsule()) }.buttonStyle(.plain) }
     private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selectedTab = title } } label: { VStack(spacing: 4) { Image(systemName: icon).font(.headline).symbolEffect(.bounce, value: active); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }.buttonStyle(.plain) }
@@ -120,16 +147,35 @@ private struct UtilityView: View {
     @State private var contacts: [Contact] = []
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
-            if title == "Contacts" {
+            if title == "Settings" {
+                settingsHeader
+                settingGroup(title: "Account") {
+                    NavigationLink { ProfileView() } label: { settingRow("person.crop.circle.fill", "My profile", "Name, email, and account") }
+                    NavigationLink { ProfileView() } label: { settingRow("iphone.and.arrow.forward", "Devices", "Manage active sessions") }
+                }
+                settingGroup(title: "Preferences") {
+                    NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell.fill", "Notifications and sounds", "Messages and calls") }
+                    NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
+                }
+                settingGroup(title: "SabayChart") {
+                    NavigationLink { PremiumView() } label: { settingRow("crown.fill", "Premium", "Unlock more features") }
+                    NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control sessions and account security.") } label: { settingRow("lock.shield.fill", "Privacy and security", "Password and device access") }
+                    NavigationLink { SettingsDetailView(title: "FAQ", detail: "Find answers about accounts, chats, and safety.") } label: { settingRow("questionmark.circle.fill", "Help center", "FAQ and support") }
+                }
+            } else if title == "Contacts" {
+                Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
                 Text("People you can chat with").foregroundStyle(SabayChatColors.textSecondary)
                 HStack { TextField("Friend email", text: $friendEmail).textInputAutocapitalization(.never).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button { Task { await addFriend() } } label: { Image(systemName: "plus").foregroundStyle(.white).padding(12).background(SabayChatColors.primary).clipShape(Circle()) } }
                 if contacts.isEmpty { Text("No contacts yet.").foregroundStyle(SabayChatColors.textSecondary) }
                 else { ForEach(contacts) { contact in Label(contact.name, systemImage: contact.isOnline ? "circle.fill" : "person.crop.circle.fill").foregroundStyle(contact.isOnline ? SabayChatColors.success : .white) } }
-            }
-
-            else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
-            else {
+            } else if title == "Calls" {
+                Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
+                Text("Your call history").foregroundStyle(SabayChatColors.textSecondary)
+                HStack(spacing: 14) {
+                    Image(systemName: "phone.arrow.up.right").font(.title3).foregroundStyle(SabayChatColors.primary).frame(width: 44, height: 44).background(SabayChatColors.primary.opacity(0.14)).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 3) { Text("No calls yet").font(.headline); Text("Your recent calls will appear here.").font(.caption).foregroundStyle(SabayChatColors.textSecondary) }
+                }.padding(16).sabayGlass(cornerRadius: 18)
+            } else {
                 NavigationLink { ProfileView() } label: { settingRow("person.crop.circle", "Profile details", "Name, email, and account") }
                 NavigationLink { SettingsDetailView(title: "FAQ", detail: "Find answers about accounts, chats, and safety.") } label: { settingRow("questionmark.circle", "FAQ", "Help center") }
                 NavigationLink { PremiumView() } label: { settingRow("crown.fill", "Premium SabayChart", "Unlock more features") }
@@ -143,6 +189,28 @@ private struct UtilityView: View {
             if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             Spacer()
         }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading).task { if title == "Contacts" { await loadContacts() } }
+    }
+
+    private var settingsHeader: some View {
+        HStack(spacing: 14) {
+            let name = UserDefaults.standard.string(forKey: "profileName") ?? "Your profile"
+            ZStack { Circle().fill(LinearGradient(colors: [SabayChatColors.primary, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)); Text(String(name.prefix(2)).uppercased()).font(.title2.bold()).foregroundStyle(.white) }.frame(width: 66, height: 66)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name).font(.title3.bold()).foregroundStyle(.white)
+                Text(UserDefaults.standard.string(forKey: "profileEmail") ?? "Signed-in account").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary).lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(SabayChatColors.textSecondary)
+        }
+        .padding(16)
+        .sabayGlass(cornerRadius: 22)
+    }
+
+    private func settingGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary).padding(.leading, 4)
+            VStack(spacing: 0) { content() }.padding(.horizontal, 14).sabayGlass(cornerRadius: 20)
+        }
     }
 
     private func loadContacts() async { guard let token = keychainToken(), let url = URL(string: "https://chart-ztyk.onrender.com/api/contacts") else { return }; var request = URLRequest(url: url); request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); guard let (data, _) = try? await URLSession.shared.data(for: request) else { return }; contacts = (try? JSONDecoder().decode([Contact].self, from: data)) ?? [] }
