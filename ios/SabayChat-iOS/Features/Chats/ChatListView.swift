@@ -6,7 +6,6 @@ struct ChatListView: View {
     @State private var selected: Conversation?
     @State private var isLoading = true
     @State private var error = ""
-    @State private var showProfile = false
     @State private var selectedTab = "Chats"
     @State private var presenceSocket: URLSessionWebSocketTask?
     @State private var serverOnline = false
@@ -28,7 +27,6 @@ struct ChatListView: View {
                             Spacer()
                             HStack(spacing: 5) { Circle().fill(serverOnline ? SabayChatColors.success : .red).frame(width: 7, height: 7).scaleEffect(pulse ? 1.35 : 1).animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: pulse); Text(serverOnline ? "Live" : "Offline").font(.caption2).foregroundStyle(SabayChatColors.textSecondary) }
                             Image(systemName: "bell").foregroundStyle(.white)
-                            Button { showProfile = true } label: { Image(systemName: "person.crop.circle.fill").foregroundStyle(.white) }
                         }.padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 12)
                         HStack(spacing: 8) {
                             Text("All Chats").font(.caption.bold()).foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 8).background(SabayChatColors.primary).clipShape(Capsule())
@@ -46,7 +44,6 @@ struct ChatListView: View {
                     HStack { tab("bubble.left.and.bubble.right.fill", "Chats", selectedTab == "Chats"); tab("person.2", "Contacts", selectedTab == "Contacts"); tab("phone", "Calls", selectedTab == "Calls"); tab("gearshape", "Settings", selectedTab == "Settings") }.padding(.top, 12).padding(.bottom, 8).background(SabayChatColors.surface)
                 }
             }.task { await load(); await checkServer(); connectPresence(); pulse = true }.onDisappear { presenceSocket?.cancel(with: .goingAway, reason: nil) }.navigationDestination(item: $selected) { ConversationView(conversation: $0) }
-                .fullScreenCover(isPresented: $showProfile) { ProfileView() }
         }.preferredColorScheme(.dark)
     }
 
@@ -82,11 +79,34 @@ private struct UtilityView: View {
                 Label("Da Rea", systemImage: "person.crop.circle.fill"); Label("Sokha Mean", systemImage: "person.crop.circle.fill")
             }
             else if title == "Calls" { Text("Your call history").foregroundStyle(SabayChatColors.textSecondary); Label("No calls yet", systemImage: "phone") }
-            else { Text("Account").font(.headline); TextField("Email address", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); TextField("Phone number", text: $phone).keyboardType(.phonePad).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("Current password", text: $currentPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); SecureField("New password", text: $newPassword).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button("Save account changes") { notice = "Settings saved on this device." }.buttonStyle(.borderedProminent); Text("Premium").font(.headline).padding(.top, 8); HStack { TextField("License key", text: $licenseKey).textInputAutocapitalization(.characters).padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)); Button { notice = licenseKey.isEmpty ? "Enter a license key." : "License sent for verification." } label: { Image(systemName: "checkmark.seal").foregroundStyle(.white).padding(12).background(SabayChatColors.primary).clipShape(Circle()) } }; Toggle("Notifications", isOn: .constant(true)); Toggle("Dark appearance", isOn: .constant(true)); Label("Connected to SabayChart server", systemImage: "checkmark.circle.fill").foregroundStyle(SabayChatColors.success) }
+            else {
+                NavigationLink { ProfileView() } label: { settingRow("person.crop.circle", "Profile details", "Name, email, and account") }
+                NavigationLink { SettingsDetailView(title: "FAQ", detail: "Find answers about accounts, chats, and safety.") } label: { settingRow("questionmark.circle", "FAQ", "Help center") }
+                NavigationLink { SettingsDetailView(title: "Premium SabayChart", detail: "HD calls, custom themes, badges, and larger uploads.") } label: { settingRow("crown", "Premium SabayChart", "Unlock more features") }
+                NavigationLink { SettingsDetailView(title: "Buy Premium", detail: "Premium payments will be available soon.") } label: { settingRow("creditcard", "Buy Premium", "Upgrade your account") }
+                NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
+                NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control your sessions and account security.") } label: { settingRow("lock.shield", "Privacy and security", "Password and device access") }
+                NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell", "Notifications and sounds", "Messages and calls") }
+                NavigationLink { ProfileView() } label: { settingRow("iphone.and.arrow.forward", "Devices", "View active sessions") }
+                if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
+            }
             if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             Spacer()
         }.foregroundStyle(.white).padding(24).frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+private extension UtilityView {
+    func settingRow(_ icon: String, _ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 14) { Image(systemName: icon).foregroundStyle(SabayChatColors.primary).frame(width: 24); VStack(alignment: .leading, spacing: 3) { Text(title).foregroundStyle(.white); Text(subtitle).font(.caption).foregroundStyle(SabayChatColors.textSecondary) }; Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(SabayChatColors.textSecondary) }
+            .padding(.vertical, 10)
+    }
+}
+
+private struct SettingsDetailView: View {
+    let title: String
+    let detail: String
+    var body: some View { ZStack { SabayChatColors.background.ignoresSafeArea(); VStack(alignment: .leading, spacing: 16) { Text(title).font(.largeTitle.bold()).foregroundStyle(.white); Text(detail).foregroundStyle(SabayChatColors.textSecondary); Spacer() }.padding(24) }.preferredColorScheme(.dark) }
 }
 
 private struct ProfileView: View {
