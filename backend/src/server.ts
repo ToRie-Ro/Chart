@@ -322,13 +322,19 @@ async function login(email: string, password: string) {
     expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
   }).select('id').single();
   if (challengeError || !challenge) return { status: 500, body: { error: 'Could not create verification challenge.' } };
-  await mailTransport.sendMail({
-    from: env.emailFrom,
-    to: String(data.email),
-    subject: `${env.appName} sign-in code`,
-    text: `Your ${env.appName} sign-in code is ${code}. It expires in 10 minutes. If you did not request this, secure your account immediately.`,
-    html: `<p>Your ${env.appName} sign-in code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. If you did not request this, secure your account immediately.</p>`,
-  });
+  try {
+    await mailTransport.sendMail({
+      from: env.emailFrom,
+      to: String(data.email),
+      subject: `${env.appName} sign-in code`,
+      text: `Your ${env.appName} sign-in code is: ${code}. It expires in 10 minutes. If you did not request this, secure your account immediately.`,
+      html: `<p>Your ${env.appName} sign-in code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. If you did not request this, secure your account immediately.</p>`,
+    });
+  } catch (mailError) {
+    console.error('Login email delivery failed:', mailError instanceof Error ? mailError.message : 'unknown error');
+    await supabase.from('email_login_challenges').delete().eq('id', challenge.id);
+    return { status: 503, body: { error: 'Could not send the verification email. Check the Brevo SMTP settings and verified sender in Render.' } };
+  }
   return { status: 202, body: { requiresVerification: true, challengeId: challenge.id, expiresIn: 600 } };
 }
 
@@ -372,13 +378,19 @@ async function register(name: unknown, email: string, password: string) {
     await supabase.from('users').delete().eq('id', data.id);
     return { status: 500, body: { error: 'Could not create email verification request.' } };
   }
-  await mailTransport.sendMail({
-    from: env.emailFrom,
-    to: email,
-    subject: `${env.appName} account verification code`,
-    text: `Your ${env.appName} verification code is ${code}. It expires in 10 minutes.`,
-    html: `<p>Your ${env.appName} verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes.</p>`,
-  });
+  try {
+    await mailTransport.sendMail({
+      from: env.emailFrom,
+      to: email,
+      subject: `${env.appName} account verification code`,
+      text: `Your ${env.appName} verification code is ${code}. It expires in 10 minutes.`,
+      html: `<p>Your ${env.appName} verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes.</p>`,
+    });
+  } catch (mailError) {
+    console.error('Registration email delivery failed:', mailError instanceof Error ? mailError.message : 'unknown error');
+    await supabase.from('users').delete().eq('id', data.id);
+    return { status: 503, body: { error: 'Could not send the verification email. Check the Brevo SMTP settings and verified sender in Render.' } };
+  }
   return { status: 202, body: { requiresVerification: true, challengeId: challenge.id, expiresIn: 600 } };
 }
 
