@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChatListView: View {
+    let onSignOut: () -> Void
     @State private var conversations: [Conversation] = []
     @State private var search = ""
     @State private var selected: Conversation?
@@ -14,6 +15,10 @@ struct ChatListView: View {
     private var filtered: [Conversation] {
         guard !search.isEmpty else { return conversations }
         return conversations.filter { ($0.name ?? "").localizedCaseInsensitiveContains(search) }
+    }
+
+    init(onSignOut: @escaping () -> Void = {}) {
+        self.onSignOut = onSignOut
     }
 
     var body: some View {
@@ -35,7 +40,7 @@ struct ChatListView: View {
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 12)
                         HStack(spacing: 8) { Image(systemName: "magnifyingglass").foregroundStyle(SabayChatColors.textSecondary); TextField("Search chats, groups, and people...", text: $search).foregroundStyle(.white).tint(SabayChatColors.primary) }.padding(12).background(SabayChatColors.surface).clipShape(RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 20).padding(.bottom, 8)
                         if isLoading { ProgressView().tint(.white).frame(maxHeight: .infinity) }
-                        else if !error.isEmpty { state(title: "Could not load chats", detail: error) }
+                        else if !error.isEmpty { state(title: "Could not load chats", detail: error); if error.contains("session") { Button("Log in again") { onSignOut() }.buttonStyle(.borderedProminent) } }
                         else if filtered.isEmpty { state(title: "No chats yet", detail: "Start a conversation to see it here.") }
                         else { ScrollView { LazyVStack(spacing: 0) { ForEach(filtered) { item in Button { selected = item } label: { row(item) }.buttonStyle(.plain) } } }.refreshable { await load() } }
                     } else {
@@ -56,7 +61,7 @@ struct ChatListView: View {
     }
     private func tab(_ icon: String, _ title: String, _ active: Bool) -> some View { Button { selectedTab = title } label: { VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption2) }.foregroundStyle(active ? SabayChatColors.primary : SabayChatColors.textSecondary).frame(maxWidth: .infinity) }.buttonStyle(.plain) }
     private func state(title: String, detail: String) -> some View { VStack(spacing: 10) { Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 34)); Text(title).font(.headline); Text(detail).font(.subheadline).multilineTextAlignment(.center).foregroundStyle(SabayChatColors.textSecondary) }.foregroundStyle(.white).padding().frame(maxHeight: .infinity) }
-    private func load() async { do { var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); if let token = keychainToken() { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }; let (data, response) = try await URLSession.shared.data(for: request); guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError.localizedDescription.isEmpty ? "Check your internet connection and try again." : caughtError.localizedDescription }; isLoading = false }
+    private func load() async { do { guard let token = keychainToken() else { throw APIError.sessionExpired }; var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/conversations")!); request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization"); let (data, response) = try await URLSession.shared.data(for: request); let status = (response as? HTTPURLResponse)?.statusCode ?? 0; guard status == 200 else { throw status == 401 ? APIError.sessionExpired : APIError.server }; conversations = try JSONDecoder().decode([Conversation].self, from: data); error = "" } catch let caughtError { error = caughtError is APIError && (caughtError as? APIError) == .sessionExpired ? "Your session expired. Please log in again." : "Could not connect to SabayChart. Pull down to try again." }; isLoading = false }
     private func connectPresence() { guard let token = keychainToken(), let url = URL(string: "wss://chart-ztyk.onrender.com/ws?token=\(token)") else { return }; presenceSocket = URLSession.shared.webSocketTask(with: url); presenceSocket?.resume() }
     private func checkServer() async { guard let url = URL(string: "https://chart-ztyk.onrender.com/health") else { return }; serverOnline = (try? await URLSession.shared.data(from: url)) != nil }
 }
@@ -219,7 +224,7 @@ private struct ProfileView: View {
 
 struct Conversation: Identifiable, Codable, Hashable { let id: String; let name: String?; let participants: [String]; let type: String; let lastMessage: Message?; let updatedAt: String }
 struct Message: Identifiable, Codable, Hashable { let id: String; let conversationId: String; let senderId: String; let text: String?; let createdAt: String; let status: String }
-private enum APIError: Error { case server }
+private enum APIError: Error, Equatable { case server; case sessionExpired }
 
 struct ConversationView: View {
     let conversation: Conversation

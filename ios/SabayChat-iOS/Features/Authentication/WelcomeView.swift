@@ -9,7 +9,7 @@ struct WelcomeView: View {
     @State private var password = ""
     @State private var message = ""
     @State private var isLoading = false
-    @State private var isAuthenticated = UserDefaults.standard.bool(forKey: "isAuthenticated")
+    @State private var isAuthenticated = keychainToken() != nil
 
     private enum AuthMode {
         case login
@@ -23,7 +23,7 @@ struct WelcomeView: View {
     var body: some View {
         Group {
             if isAuthenticated {
-                ChatListView()
+                ChatListView { isAuthenticated = false }
             } else {
                 authenticationView
             }
