@@ -82,12 +82,15 @@ app.get('/api/conversations', async (req, res) => {
 
 app.get('/api/messages/:conversationId', async (req, res) => {
   const conversationId = req.params.conversationId;
+  const userId = authenticatedUserId(req);
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  const member = await isConversationMember(conversationId, userId);
+  if (!member) return res.status(403).json({ error: 'You are not a member of this conversation.' });
   if (supabase) {
     const { data, error } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
-    if (!error) return res.json(data);
+    if (error) return res.status(500).json({ error: 'Could not load messages.' });
+    return res.json(data);
   }
-  const messages = mockMessages.filter((message) => message.conversationId === conversationId);
-  res.json(messages);
 });
 
 app.post('/api/messages/:conversationId', async (req, res) => {
@@ -98,6 +101,7 @@ app.post('/api/messages/:conversationId', async (req, res) => {
 
   try {
     const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    if (!await isConversationMember(req.params.conversationId, String(payload.sub))) return res.status(403).json({ error: 'You are not a member of this conversation.' });
     const { data, error } = await supabase.from('messages').insert({ conversation_id: req.params.conversationId, sender_id: payload.sub, text, status: 'sent' }).select('*').single();
     if (error) return res.status(500).json({ error: 'Could not save message.' });
     return res.status(201).json(data);
@@ -136,6 +140,12 @@ async function login(email: string, password: string) {
   const token = jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' });
   await supabase.from('device_sessions').insert({ user_id: user.id, device_name: 'Mobile device', platform: 'unknown' });
   return { status: 200, body: { token, user } };
+}
+
+async function isConversationMember(conversationId: string, userId: string) {
+  if (!supabase) return false;
+  const { data, error } = await supabase.from('conversation_participants').select('user_id').eq('conversation_id', conversationId).eq('user_id', userId).maybeSingle();
+  return !error && data !== null;
 }
 
 async function register(name: unknown, email: string, password: string) {
