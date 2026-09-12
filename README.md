@@ -73,6 +73,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 
 The service-role key must only exist in Render environment variables. Never use it in iOS, Android, browser code, or Git.
 
+After running the SQL, the API uses Supabase for registration and login. Test the protected profile endpoint with the token returned by login:
+
+```text
+GET https://chart-ztyk.onrender.com/api/me
+Authorization: Bearer <login-token>
+```
+
 ## Product goals
 
 - Shared backend and accounts across platforms

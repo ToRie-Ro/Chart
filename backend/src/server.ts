@@ -1,15 +1,13 @@
 import express from 'express';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
 import { env } from './config/env.js';
+import { supabase } from './config/supabase.js';
 import { mockConversations, mockMessages, mockUsers } from './data/mockData.js';
 
 const app = express();
-const passwords = new Map<string, string>([
-  ['darea@sabaychat.app', 'password'],
-  ['sokha@sabaychat.app', 'password'],
-  ['team@sabaychat.app', 'password'],
-]);
 app.use(cors());
 app.use(express.json());
 
@@ -19,6 +17,20 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/users', (_req, res) => {
   res.json(mockUsers);
+});
+
+app.get('/api/me', async (req, res) => {
+  const token = req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+
+  try {
+    const payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
+    const { data, error } = await supabase.from('users').select('*').eq('id', payload.sub).single();
+    if (error || !data) return res.status(404).json({ error: 'Account not found.' });
+    return res.json({ user: publicUser(data) });
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token.' });
+  }
 });
 
 app.get('/api/conversations', (_req, res) => {
@@ -38,16 +50,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  const user = mockUsers.find((candidate) => candidate.email.toLowerCase() === String(email).toLowerCase());
-
-  if (!user || passwords.get(user.email) !== password) {
-    return res.status(401).json({ error: 'Invalid credentials.' });
-  }
-
-  return res.json({
-    token: 'mock-jwt-token',
-    user,
-  });
+  void login(email, password).then((result) => res.status(result.status).json(result.body));
 });
 
 app.post('/api/auth/register', (req, res) => {
@@ -58,32 +61,30 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'Name, email, and a password of at least 6 characters are required.' });
   }
 
-  if (mockUsers.some((candidate) => candidate.email.toLowerCase() === normalizedEmail)) {
-    return res.status(409).json({ error: 'An account with this email already exists.' });
-  }
-
-  const id = `user_${mockUsers.length + 1}`;
-  const username = normalizedEmail.split('@')[0].replace(/[^a-z0-9_]/g, '');
-  const user = {
-    id,
-    name: String(name).trim(),
-    email: normalizedEmail,
-    username: username || id,
-    bio: '',
-    isOnline: true,
-    lastSeen: new Date().toISOString(),
-    locale: 'en' as const,
-    role: 'user' as const,
-  };
-
-  mockUsers.push(user);
-  passwords.set(normalizedEmail, password);
-
-  return res.status(201).json({
-    token: 'mock-jwt-token',
-    user,
-  });
+  void register(name, normalizedEmail, password).then((result) => res.status(result.status).json(result.body));
 });
+
+async function login(email: string, password: string) {
+  if (!supabase) return { status: 503, body: { error: 'Database is not configured.' } };
+  const { data, error } = await supabase.from('users').select('*').eq('email', String(email).trim().toLowerCase()).maybeSingle();
+  if (error) return { status: 500, body: { error: 'Database request failed.' } };
+  if (!data || !(await bcrypt.compare(password, data.password_hash))) return { status: 401, body: { error: 'Invalid credentials.' } };
+  const user = publicUser(data);
+  return { status: 200, body: { token: jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' }), user } };
+}
+
+async function register(name: unknown, email: string, password: string) {
+  if (!supabase) return { status: 503, body: { error: 'Database is not configured.' } };
+  const username = email.split('@')[0].replace(/[^a-z0-9_]/g, '') || `user_${Date.now()}`;
+  const { data, error } = await supabase.from('users').insert({ name: String(name).trim(), email, username, password_hash: await bcrypt.hash(password, 12) }).select('*').single();
+  if (error) return { status: error.code === '23505' ? 409 : 500, body: { error: error.code === '23505' ? 'An account with this email already exists.' : 'Could not create account.' } };
+  const user = publicUser(data);
+  return { status: 201, body: { token: jwt.sign({ sub: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' }), user } };
+}
+
+function publicUser(user: Record<string, unknown>) {
+  return { id: String(user.id), name: String(user.name), email: String(user.email), username: String(user.username), bio: String(user.bio ?? ''), isOnline: true, lastSeen: new Date().toISOString(), locale: user.locale === 'km' ? 'km' : 'en', role: user.role === 'admin' || user.role === 'moderator' ? user.role : 'user' };
+}
 
 const server = app.listen(env.port, () => {
   console.log(`${env.appName} backend running on port ${env.port}`);

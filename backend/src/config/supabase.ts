@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { env } from './env.js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-export const supabase = supabaseUrl && serviceRoleKey
-  ? createClient(supabaseUrl, serviceRoleKey, {
+export const supabase = env.supabaseUrl && env.supabaseServiceRoleKey
+  ? createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
   : null;
