@@ -1,0 +1,55 @@
+name: Flutter iOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: Backend URL used by the Flutter app
+        required: true
+        default: https://chart-ztyk.onrender.com
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Select Xcode
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' | sort | tail -n 1)
+          test -n "$XCODE_PATH"
+          sudo xcode-select -switch "$XCODE_PATH"
+          xcodebuild -version
+
+      - name: Generate iOS platform files
+        working-directory: flutter/sabaychat_flutter
+        run: flutter create . --platforms=ios --project-name sabaychat_flutter
+
+      - name: Install dependencies
+        working-directory: flutter/sabaychat_flutter
+        run: flutter pub get
+
+      - name: Analyze and test
+        working-directory: flutter/sabaychat_flutter
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Build iOS 26-compatible app
+        working-directory: flutter/sabaychat_flutter
+        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+
+      - name: Upload Flutter iOS app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: SabayChat-flutter-ios-app
+          path: flutter/sabaychat_flutter/build/ios/iphoneos/Runner.app
+          if-no-files-found: error

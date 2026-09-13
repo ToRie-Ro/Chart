@@ -221,6 +221,36 @@ app.get('/api/conversations', async (req, res) => {
   }));
 });
 
+app.post('/api/conversations', async (req, res) => {
+  const userId = req.userId;
+  const name = String(req.body?.name ?? '').trim();
+  const type = String(req.body?.type ?? '').trim().toLowerCase();
+  if (!userId || !supabase) return res.status(401).json({ error: 'Authentication required.' });
+  if (!name || name.length > 80) return res.status(400).json({ error: 'A name between 1 and 80 characters is required.' });
+  if (type !== 'group' && type !== 'channel') return res.status(400).json({ error: 'Conversation type must be group or channel.' });
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from('conversations')
+    .insert({ name, type })
+    .select('id, name, type, created_at')
+    .single();
+  if (conversationError || !conversation) {
+    console.error('Conversation creation failed:', conversationError?.message ?? 'unknown error');
+    return res.status(500).json({ error: 'Could not create conversation.' });
+  }
+
+  const { error: participantError } = await supabase
+    .from('conversation_participants')
+    .insert({ conversation_id: conversation.id, user_id: userId });
+  if (participantError) {
+    await supabase.from('conversations').delete().eq('id', conversation.id);
+    console.error('Conversation owner membership failed:', participantError.message);
+    return res.status(500).json({ error: 'Could not create conversation membership.' });
+  }
+
+  return res.status(201).json({ ...conversation, participants: [userId] });
+});
+
 app.get('/api/messages/:conversationId', async (req, res) => {
   const conversationId = req.params.conversationId;
   const userId = req.userId;

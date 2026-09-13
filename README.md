@@ -164,6 +164,22 @@ The workflow generates Flutter's Android host files during the build. This is
 intentional because the repository-wide Android ignore rule excludes generated
 Flutter platform folders from source control.
 
+### Flutter iOS build for iOS 26+
+
+The **Flutter iOS Build** workflow generates the Flutter iOS host files,
+selects the available Xcode toolchain on the macOS runner, runs analysis and
+tests, and builds an unsigned iOS app bundle compatible with the current iOS
+26 SDK. Start it from **Actions > Flutter iOS Build > Run workflow**, then
+download the `SabayChat-flutter-ios-app` artifact. An Apple signing identity is
+required before installing on a physical device or publishing through
+TestFlight.
+
+Authenticated clients can create groups and channels through
+`POST /api/conversations` with a JSON body such as
+`{"name":"Design Team","type":"group"}` or
+`{"name":"SabayChat News","type":"channel"}`. The server adds the creator as
+the first member and never trusts the client to grant itself membership.
+
 ### iOS IPA test build
 
 The iOS project now includes the SabayChart app icon in `ios/SabayChat-iOS/Assets.xcassets` and uses the `com.sabaychart.ios` bundle identifier. On a Mac with Xcode 26 installed:
