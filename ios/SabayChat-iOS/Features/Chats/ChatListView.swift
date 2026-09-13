@@ -170,7 +170,7 @@ private struct UtilityView: View {
                 settingsHeader
                 settingGroup(title: "Account") {
                     NavigationLink { ProfileView() } label: { settingRow("person.crop.circle.fill", "My profile", "Name, email, and account") }
-                    NavigationLink { ProfileView() } label: { settingRow("iphone.and.arrow.forward", "Devices", "Manage active sessions") }
+                    NavigationLink { DeviceSessionsView() } label: { settingRow("iphone.and.arrow.forward", "Devices & Sessions", "Manage active sessions") }
                     Button { showSignOutConfirmation = true } label: { settingRow("rectangle.portrait.and.arrow.right", "Log out", "End this device session") }
                 }
                 settingGroup(title: "Preferences") {
@@ -203,7 +203,7 @@ private struct UtilityView: View {
                 NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
                 NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control your sessions and account security.") } label: { settingRow("lock.shield", "Privacy and security", "Password and device access") }
                 NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell", "Notifications and sounds", "Messages and calls") }
-                NavigationLink { ProfileView() } label: { settingRow("iphone.and.arrow.forward", "Devices", "View active sessions") }
+                NavigationLink { DeviceSessionsView() } label: { settingRow("iphone.and.arrow.forward", "Devices & Sessions", "View active sessions") }
                 if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
             }
             if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
@@ -475,7 +475,12 @@ private struct PremiumView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let serverError = try? JSONDecoder().decode(ServerError.self, from: data)
-            status = (200..<300).contains(code) ? "Premium activated." : (serverError?.error ?? "License could not be activated.")
+            if (200..<300).contains(code) {
+                status = "Premium activated."
+                UserDefaults.standard.set("premium", forKey: "profilePlan")
+            } else {
+                status = serverError?.error ?? "License could not be activated."
+            }
         } catch { status = "Could not connect to SabayChart." }
         isActivating = false
     }
@@ -485,10 +490,7 @@ private struct PremiumView: View {
 
 private struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var devices: [String] = []
     @State private var showEditProfile = false
-    @State private var showLogoutAll = false
-    @State private var notice = ""
     var body: some View {
         NavigationStack {
             ZStack {
@@ -496,21 +498,25 @@ private struct ProfileView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     let name = UserDefaults.standard.string(forKey: "profileName") ?? "Your profile"
                     let email = UserDefaults.standard.string(forKey: "profileEmail") ?? "Signed-in account"
-                    ZStack { Circle().fill(SabayChatColors.primary); Text(String(name.prefix(2)).uppercased()).font(.title.bold()).foregroundStyle(.white) }.frame(width: 88, height: 88)
-                    Text(name).font(.title.bold()).foregroundStyle(.white)
-                    Text(email).foregroundStyle(SabayChatColors.textSecondary)
-                    Divider().overlay(SabayChatColors.border)
-                    Label("Account is connected to SabayChart", systemImage: "checkmark.seal.fill").foregroundStyle(SabayChatColors.success)
-                    Text("Devices").font(.headline).foregroundStyle(.white).padding(.top, 12)
-                    if devices.isEmpty { Text("Loading device activity...").foregroundStyle(SabayChatColors.textSecondary) }
-                    else { ForEach(devices, id: \.self) { Label($0, systemImage: "iphone") } }
-                    Button { showLogoutAll = true } label: {
-                        Label("Log out all other devices", systemImage: "rectangle.portrait.and.arrow.right")
-                            .foregroundStyle(.red)
+                    let isPremium = UserDefaults.standard.string(forKey: "profilePlan") == "premium"
+                    HStack(spacing: 14) {
+                        ZStack { Circle().fill(LinearGradient(colors: [SabayChatColors.primary, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)); Text(String(name.prefix(2)).uppercased()).font(.title.bold()).foregroundStyle(.white) }.frame(width: 88, height: 88)
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 7) {
+                                Text(name).font(.title3.bold()).foregroundStyle(.white)
+                                if isPremium { Image(systemName: "checkmark.seal.fill").foregroundStyle(SabayChatColors.primary) }
+                            }
+                            Text(email).font(.subheadline).foregroundStyle(SabayChatColors.textSecondary)
+                            Text(isPremium ? "Premium member" : "SabayChart member").font(.caption).foregroundStyle(isPremium ? SabayChatColors.primary : SabayChatColors.textSecondary)
+                        }
                     }
-                    if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
-                    Text("Premium coming soon").font(.headline).foregroundStyle(.white).padding(.top, 12)
-                    Text("HD calls, custom themes, larger uploads, and priority support.").foregroundStyle(SabayChatColors.textSecondary)
+                    .padding(18)
+                    .sabayGlass(cornerRadius: 22)
+                    profileRow(icon: "at", title: "Username", value: UserDefaults.standard.string(forKey: "profileEmail")?.split(separator: "@").first.map(String.init) ?? "sabaychat_user")
+                    profileRow(icon: "envelope", title: "Email", value: email)
+                    profileRow(icon: "text.alignleft", title: "Bio", value: isPremium ? "Premium SabayChart member" : "Available on SabayChart")
+                    Label(isPremium ? "Verified Premium account" : "Account connected to SabayChart", systemImage: isPremium ? "checkmark.seal.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(isPremium ? SabayChatColors.primary : SabayChatColors.success)
                     Spacer()
                 }.padding(24)
             }
@@ -519,14 +525,52 @@ private struct ProfileView: View {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) }
             }
             .sheet(isPresented: $showEditProfile) { ProfileEditView() }
-            .confirmationDialog("End other sessions?", isPresented: $showLogoutAll, titleVisibility: .visible) {
-                Button("Log out other devices", role: .destructive) { Task { await logoutAllDevices() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This keeps your current device signed in.")
-            }
-            .task { await loadDevices() }
         }.preferredColorScheme(.dark)
+    }
+
+    private func profileRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(SabayChatColors.primary).frame(width: 24)
+            Text(title).foregroundStyle(SabayChatColors.textSecondary)
+            Spacer()
+            Text(value).foregroundStyle(.white).lineLimit(1)
+        }
+        .padding(14)
+        .sabayGlass(cornerRadius: 14)
+    }
+}
+
+private struct DeviceSessionsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var devices: [String] = []
+    @State private var notice = ""
+    @State private var showLogoutAll = false
+    var body: some View {
+        ZStack {
+            SabayChatColors.background.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Active connections").font(.title.bold()).foregroundStyle(.white)
+                Text("Review devices signed in to your SabayChart account.").foregroundStyle(SabayChatColors.textSecondary)
+                if devices.isEmpty { ProgressView().tint(.white) }
+                else {
+                    ForEach(devices, id: \.self) { device in
+                        Label(device, systemImage: "iphone").foregroundStyle(.white).padding(16).frame(maxWidth: .infinity, alignment: .leading).sabayGlass(cornerRadius: 16)
+                    }
+                }
+                Button("Log out all other devices") { showLogoutAll = true }.foregroundStyle(.red)
+                if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
+                Spacer()
+            }.padding(24)
+        }
+        .navigationTitle("Devices & Sessions")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(SabayChatColors.primary) } }
+        .confirmationDialog("End other sessions?", isPresented: $showLogoutAll, titleVisibility: .visible) {
+            Button("Log out other devices", role: .destructive) { Task { await logoutAllDevices() } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("This keeps your current device signed in.") }
+        .task { await loadDevices() }
+        .preferredColorScheme(.dark)
     }
 
     private func loadDevices() async {

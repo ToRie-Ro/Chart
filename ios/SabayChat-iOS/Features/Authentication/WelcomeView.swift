@@ -239,6 +239,7 @@ struct WelcomeView: View {
                         saveKeychainToken(token)
                         UserDefaults.standard.set(user["name"] as? String, forKey: "profileName")
                         UserDefaults.standard.set(user["email"] as? String, forKey: "profileEmail")
+                        UserDefaults.standard.set(user["plan"] as? String ?? "free", forKey: "profilePlan")
                     }
                     isAuthenticated = true
                 } else {
