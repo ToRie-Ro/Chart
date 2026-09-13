@@ -170,9 +170,8 @@ The **Flutter iOS Build** workflow generates the Flutter iOS host files,
 selects the available Xcode toolchain on the macOS runner, runs analysis and
 tests, and builds an unsigned iOS app bundle compatible with the current iOS
 26 SDK. Start it from **Actions > Flutter iOS Build > Run workflow**, then
-download the `SabayChat-flutter-ios-app` artifact. An Apple signing identity is
-required before installing on a physical device or publishing through
-TestFlight.
+download the `SabayChat-flutter.ipa` artifact. An Apple signing identity is required
+before installing on a physical device or publishing through TestFlight.
 
 Authenticated clients can create groups and channels through
 `POST /api/conversations` with a JSON body such as

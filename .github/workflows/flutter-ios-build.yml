@@ -47,9 +47,22 @@ jobs:
         working-directory: flutter/sabaychat_flutter
         run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
 
-      - name: Upload Flutter iOS app bundle
+      - name: Package IPA
+        working-directory: flutter/sabaychat_flutter
+        run: |
+          set -e
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          test -d "$APP_PATH"
+          rm -rf build/ipa build/SabayChat.ipa
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/SabayChat.app
+          cd build/ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload ../SabayChat.ipa
+          test -f ../SabayChat.ipa
+
+      - name: Upload Flutter IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SabayChat-flutter-ios-app
-          path: flutter/sabaychat_flutter/build/ios/iphoneos/Runner.app
+          name: SabayChat-flutter.ipa
+          path: flutter/sabaychat_flutter/build/SabayChat.ipa
           if-no-files-found: error
