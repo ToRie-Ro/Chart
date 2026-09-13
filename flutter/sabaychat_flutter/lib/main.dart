@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/cupertino.dart';
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -15,6 +17,78 @@ const blueDark = Color(0xFF0F4CC9);
 const muted = Color(0xFFA7B0C0);
 const green = Color(0xFF2ECF9A);
 const border = Color(0xFF24324A);
+
+class LiquidGlass extends StatelessWidget {
+  const LiquidGlass(
+      {required this.child, this.padding, this.radius = 24, super.key});
+  final Widget child;
+  final EdgeInsets? padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: Colors.white.withValues(alpha: .14)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .25),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        ),
+      );
+}
+
+class GlassBackground extends StatelessWidget {
+  const GlassBackground({required this.child, super.key});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Stack(children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF111D38), navy, Color(0xFF080B14)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        const Positioned(
+            top: -100,
+            right: -70,
+            child: _Glow(color: Color(0x551D6BFF), size: 260)),
+        const Positioned(
+            bottom: 80,
+            left: -120,
+            child: _Glow(color: Color(0x386D3BFF), size: 300)),
+        child,
+      ]);
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.color, required this.size});
+  final Color color;
+  final double size;
+  @override
+  Widget build(BuildContext context) => ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+        child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      );
+}
 
 class ApiClient {
   String? accessToken;
@@ -178,7 +252,8 @@ class _WelcomePageState extends State<WelcomePage> {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: navy,
         body: SafeArea(
-          child: SingleChildScrollView(
+          child: GlassBackground(
+              child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -255,39 +330,56 @@ class _WelcomePageState extends State<WelcomePage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(error,
                         style: const TextStyle(color: Colors.redAccent))),
-              SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: FilledButton(
-                      onPressed: loading
-                          ? null
-                          : () async {
-                              setState(() {
-                                loading = true;
-                                error = '';
-                              });
-                              try {
-                                await widget.client.authenticate(
-                                    email: email.text,
-                                    password: password.text,
-                                    name: registering ? name.text : null);
-                                widget.onSignedIn();
-                              } catch (exception) {
-                                setState(() => error = exception.toString());
-                              } finally {
-                                if (mounted) setState(() => loading = false);
-                              }
-                            },
-                      style: FilledButton.styleFrom(
-                          backgroundColor: blue,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16))),
-                      child: Text(
-                          loading
-                              ? 'Please wait...'
-                              : (registering ? 'Create account' : 'Sign in'),
-                          style:
-                              const TextStyle(fontWeight: FontWeight.bold)))),
+              LiquidGlass(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(children: [
+                    const Text(
+                        'SabayChart is protected with encrypted connections.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: muted, fontSize: 12)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: FilledButton(
+                          onPressed: loading
+                              ? null
+                              : () async {
+                                  setState(() {
+                                    loading = true;
+                                    error = '';
+                                  });
+                                  try {
+                                    await widget.client.authenticate(
+                                        email: email.text,
+                                        password: password.text,
+                                        name: registering ? name.text : null);
+                                    widget.onSignedIn();
+                                  } catch (exception) {
+                                    setState(
+                                        () => error = exception.toString());
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() {
+                                        loading = false;
+                                      });
+                                    }
+                                  }
+                                },
+                          style: FilledButton.styleFrom(
+                              backgroundColor: blue,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16))),
+                          child: Text(
+                              loading
+                                  ? 'Please wait...'
+                                  : (registering
+                                      ? 'Create account'
+                                      : 'Sign in'),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold))),
+                    ),
+                  ])),
               const SizedBox(height: 22),
               const Row(children: [
                 Expanded(child: Divider(color: border)),
@@ -329,7 +421,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   child: Text('Secure connection • Made in Cambodia 🇰🇭',
                       style: TextStyle(color: muted, fontSize: 11))),
             ]),
-          ),
+          )),
         ),
       );
 }
@@ -999,17 +1091,26 @@ class _PrivacyPageState extends State<PrivacyPage> {
             title: 'Passcode & Face ID',
             detail: 'Keep your app locked and secure',
             onTap: () {}),
-        Card(
-          color: surface,
-          child: SwitchListTile(
-            value: twoStep,
-            onChanged: (v) => setState(() => twoStep = v),
-            title: const Text('Two-Step Verification'),
-            subtitle: const Text(
-              'Add an extra layer of security',
-              style: TextStyle(color: muted),
-            ),
-          ),
+        LiquidGlass(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(children: [
+            const Icon(Icons.shield_outlined, color: blue),
+            const SizedBox(width: 12),
+            const Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('Two-Step Verification',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  SizedBox(height: 3),
+                  Text('Add an extra layer of security',
+                      style: TextStyle(color: muted, fontSize: 12))
+                ])),
+            CupertinoSwitch(
+                value: twoStep,
+                activeTrackColor: blue,
+                onChanged: (v) => setState(() => twoStep = v))
+          ]),
         ),
         const SizedBox(height: 16),
         const Text('ACCOUNT ACCESS',
