@@ -144,6 +144,22 @@ wired.
 
 GitHub Actions workflows are included for automated Android APK/AAB and iOS IPA generation.
 
+### Flutter Android APK from GitHub Actions
+
+To build the Flutter Android APK without installing Flutter locally:
+
+1. Open the repository on GitHub.
+2. Open **Actions**.
+3. Select **Flutter Android APK**.
+4. Select **Run workflow**.
+5. Keep the default `API_BASE_URL`, or enter another backend URL.
+6. When the workflow finishes, open the completed run and download
+   **SabayChat-flutter-release-apk** from **Artifacts**.
+
+The downloaded `app-release.apk` can be installed on an Android emulator or
+Android device. This build is unsigned for testing; configure Android signing
+secrets before distributing it through Google Play.
+
 ### iOS IPA test build
 
 The iOS project now includes the SabayChart app icon in `ios/SabayChat-iOS/Assets.xcassets` and uses the `com.sabaychart.ios` bundle identifier. On a Mac with Xcode 26 installed:
