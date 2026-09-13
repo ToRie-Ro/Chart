@@ -9,9 +9,6 @@ struct WelcomeView: View {
     @State private var password = ""
     @State private var message = ""
     @State private var isLoading = false
-    @State private var verificationCode = ""
-    @State private var challengeId: String?
-    @State private var showingCodeEntry = false
     @State private var showingWelcome = true
     @State private var isAuthenticated = keychainToken() != nil
 
@@ -42,8 +39,6 @@ struct WelcomeView: View {
                     Spacer(minLength: 62)
                     if showingWelcome {
                         welcomeView
-                    } else if showingCodeEntry {
-                        codeEntryView
                     } else {
                         accountFormView
                     }
@@ -112,7 +107,7 @@ struct WelcomeView: View {
             Text(mode == .register ? "Enter your details" : "Welcome back")
                 .font(.title3.bold())
                 .foregroundStyle(.white)
-            Text(mode == .register ? "We will send a 6-digit confirmation code to verify your identity." : "Sign in securely to continue to your conversations.")
+            Text(mode == .register ? "Create your secure SabayChart account." : "Sign in securely to continue to your conversations.")
                 .font(.subheadline)
                 .foregroundStyle(SabayChatColors.textSecondary)
             if mode == .register {
@@ -127,7 +122,7 @@ struct WelcomeView: View {
                 HStack {
                     Spacer()
                     if isLoading { ProgressView().tint(.white) }
-                    Text(isLoading ? "Please wait..." : (mode == .register ? "Send Code" : "Sign In"))
+                    Text(isLoading ? "Please wait..." : (mode == .register ? "Create Account" : "Sign In"))
                         .fontWeight(.semibold)
                     Image(systemName: "arrow.right")
                     Spacer()
@@ -213,53 +208,6 @@ struct WelcomeView: View {
         .buttonStyle(SabayPrimaryButtonStyle())
     }
 
-    private var codeEntryView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button {
-                showingCodeEntry = false
-            } label: {
-                Image(systemName: "arrow.left").foregroundStyle(.white)
-            }.buttonStyle(.plain)
-            Text("Your Identity").font(.system(size: 29, weight: .bold, design: .rounded)).foregroundStyle(.white)
-            progressView(step: 2, total: 2)
-            Text("VERIFICATION CODE").font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary)
-            HStack(spacing: 8) {
-                ForEach(0..<6, id: \.self) { index in
-                    Text(index < verificationCode.count ? String(Array(verificationCode)[index]) : "")
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(SabayChatColors.surface)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(index == min(verificationCode.count, 5) ? SabayChatColors.primary : .white.opacity(0.10), lineWidth: 1.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
-            TextField("", text: $verificationCode)
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .opacity(0.01)
-                .frame(height: 1)
-                .onChange(of: verificationCode) { _, value in
-                    verificationCode = String(value.filter(\.isNumber).prefix(6))
-                }
-            Text("A code was sent to \(email).").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary)
-            if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(SabayChatColors.primary) }
-            Button("Verify and continue") { verifyCode() }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(.white)
-                .background(SabayChatColors.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .buttonStyle(SabayPrimaryButtonStyle())
-            Button("Use a different account") {
-                showingCodeEntry = false
-                challengeId = nil
-                verificationCode = ""
-                message = ""
-            }.font(.subheadline.weight(.semibold)).foregroundStyle(SabayChatColors.primary).frame(maxWidth: .infinity)
-        }
-    }
-
     private func submit() {
         guard !email.isEmpty, !password.isEmpty, mode == .login || !name.isEmpty else {
             message = mode == .login ? "Enter your email and password." : "Enter your name, email, and password."
@@ -284,13 +232,7 @@ struct WelcomeView: View {
             let serverMessage = data.flatMap { try? JSONDecoder().decode(ServerError.self, from: $0) }?.error
             DispatchQueue.main.async {
                 isLoading = false
-                if statusCode == 202, let data,
-                   let responseBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let challenge = responseBody["challengeId"] as? String {
-                    challengeId = challenge
-                    showingCodeEntry = true
-                    message = "A verification code was sent to your email."
-                } else if (200..<300).contains(statusCode) {
+                if (200..<300).contains(statusCode) {
                     message = mode == .login ? "Login successful." : "Account created successfully."
                     UserDefaults.standard.set(true, forKey: "isAuthenticated")
                     if let data, let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = auth["token"] as? String, let user = auth["user"] as? [String: Any] {
@@ -302,29 +244,6 @@ struct WelcomeView: View {
                 } else {
                     message = serverMessage ?? requestError?.localizedDescription ?? "The server could not complete your request."
                 }
-            }
-        }.resume()
-    }
-
-    private func verifyCode() {
-        guard let challengeId, verificationCode.count == 6 else { message = "Enter the 6-digit code."; return }
-        isLoading = true
-        var request = URLRequest(url: URL(string: "https://chart-ztyk.onrender.com/api/auth/verify-login-code")!)
-        request.timeoutInterval = 35
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["challengeId": challengeId, "code": verificationCode])
-        URLSession.shared.dataTask(with: request) { data, response, requestError in
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            DispatchQueue.main.async {
-                isLoading = false
-                guard (200..<300).contains(status), let data,
-                      let auth = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let token = auth["token"] as? String else {
-                    message = (try? JSONDecoder().decode(ServerError.self, from: data ?? Data()))?.error ?? requestError?.localizedDescription ?? "That code is invalid or expired."; return
-                }
-                saveKeychainToken(token)
-                isAuthenticated = true
             }
         }.resume()
     }
