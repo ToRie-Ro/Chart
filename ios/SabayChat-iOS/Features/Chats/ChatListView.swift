@@ -179,7 +179,7 @@ private struct UtilityView: View {
                 }
                 settingGroup(title: "SabayChart") {
                     NavigationLink { PremiumView() } label: { settingRow("crown.fill", "Premium", "Unlock more features") }
-                    NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control sessions and account security.") } label: { settingRow("lock.shield.fill", "Privacy and security", "Password and device access") }
+                    NavigationLink { PrivacySecurityView() } label: { settingRow("lock.shield.fill", "Privacy and security", "Password and device access") }
                     NavigationLink { SettingsDetailView(title: "FAQ", detail: "Find answers about accounts, chats, and safety.") } label: { settingRow("questionmark.circle.fill", "Help center", "FAQ and support") }
                 }
             } else if title == "Contacts" {
@@ -201,7 +201,7 @@ private struct UtilityView: View {
                 NavigationLink { PremiumView() } label: { settingRow("crown.fill", "Premium SabayChart", "Unlock more features") }
                 NavigationLink { PremiumView() } label: { settingRow("creditcard.fill", "Buy Premium", "Activate with a license key") }
                 NavigationLink { SettingsDetailView(title: "Language", detail: "English / Khmer") } label: { settingRow("globe", "Language", "English") }
-                NavigationLink { SettingsDetailView(title: "Privacy and security", detail: "Control your sessions and account security.") } label: { settingRow("lock.shield", "Privacy and security", "Password and device access") }
+                NavigationLink { PrivacySecurityView() } label: { settingRow("lock.shield", "Privacy and security", "Password and device access") }
                 NavigationLink { SettingsDetailView(title: "Notifications and sounds", detail: "Choose which alerts and sounds you receive.") } label: { settingRow("bell", "Notifications and sounds", "Messages and calls") }
                 NavigationLink { DeviceSessionsView() } label: { settingRow("iphone.and.arrow.forward", "Devices & Sessions", "View active sessions") }
                 if !notice.isEmpty { Text(notice).font(.footnote).foregroundStyle(SabayChatColors.textSecondary) }
@@ -356,6 +356,93 @@ private struct SettingsDetailView: View {
     let title: String
     let detail: String
     var body: some View { ZStack { SabayChatColors.background.ignoresSafeArea(); VStack(alignment: .leading, spacing: 16) { Text(title).font(.largeTitle.bold()).foregroundStyle(.white); Text(detail).foregroundStyle(SabayChatColors.textSecondary); Spacer() }.padding(24) }.preferredColorScheme(.dark) }
+}
+
+private struct PrivacySecurityView: View {
+    @State private var twoStepEnabled = false
+    @State private var showComingSoon = false
+
+    var body: some View {
+        ZStack {
+            SabayChatColors.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Privacy & Security").font(.largeTitle.bold()).foregroundStyle(.white)
+                    Text("Your Privacy. Our Priority.").font(.subheadline).foregroundStyle(SabayChatColors.textSecondary)
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle().stroke(SabayChatColors.surface, lineWidth: 9)
+                            Circle().trim(from: 0, to: 0.95).stroke(SabayChatColors.success, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90))
+                            Text("95").font(.title2.bold()).foregroundStyle(.white)
+                        }.frame(width: 76, height: 76)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Privacy Score").font(.headline).foregroundStyle(.white)
+                            Text("Excellent").font(.title3.bold()).foregroundStyle(SabayChatColors.success)
+                            Text("Your data is well protected.").font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(18)
+                    .background(LinearGradient(colors: [SabayChatColors.primaryDark.opacity(0.85), SabayChatColors.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    securityGroup("SECURITY") {
+                        securityRow("nosign", .red, "Blocked Users", "Manage who cannot contact you")
+                        securityRow("globe", SabayChatColors.primary, "Active Websites", "Review active connections")
+                        securityRow("faceid", .green, "Passcode & Face ID", "Keep your app locked and secure")
+                        toggleRow("shield.fill", .purple, "Two-Step Verification", "Add an extra layer of security", $twoStepEnabled)
+                    }
+                    securityGroup("ACCOUNT ACCESS") {
+                        securityRow("key.fill", .blue, "Passkey", "Use a passkey for faster sign in")
+                        NavigationLink { DeviceSessionsView() } label: {
+                            securityRowContent("iphone", SabayChatColors.primary, "Devices & Sessions", "Review signed-in devices")
+                        }
+                    }
+                    Text("Privacy controls are enforced by the SabayChat server.").font(.footnote).foregroundStyle(SabayChatColors.textSecondary)
+                }.padding(20)
+            }
+        }
+        .navigationTitle("Privacy & Security")
+        .navigationBarTitleDisplayMode(.inline)
+        .preferredColorScheme(.dark)
+        .alert("Coming soon", isPresented: $showComingSoon) { Button("OK", role: .cancel) {} }
+    }
+
+    private func securityGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.bold()).foregroundStyle(SabayChatColors.textSecondary)
+            VStack(spacing: 0) { content() }.sabayGlass(cornerRadius: 18)
+        }
+    }
+
+    private func securityRow(_ icon: String, _ color: Color, _ title: String, _ detail: String) -> some View {
+        Button { showComingSoon = true } label: {
+            securityRowContent(icon, color, title, detail)
+        }.buttonStyle(.plain)
+    }
+
+    private func securityRowContent(_ icon: String, _ color: Color, _ title: String, _ detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.white).frame(width: 34, height: 34).background(color).clipShape(RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(detail).font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+        }.padding(13)
+    }
+
+    private func toggleRow(_ icon: String, _ color: Color, _ title: String, _ detail: String, _ value: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.white).frame(width: 34, height: 34).background(color).clipShape(RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(detail).font(.caption).foregroundStyle(SabayChatColors.textSecondary)
+            }
+            Spacer()
+            Toggle("", isOn: value).labelsHidden().tint(SabayChatColors.primary)
+        }.padding(13)
+    }
 }
 
 private struct NotificationSettingsView: View {
