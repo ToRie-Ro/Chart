@@ -117,6 +117,29 @@ Open the Xcode project in `ios/SabayChat-iOS` and build with the Xcode release t
 
 Open the Android project in Android Studio and sync Gradle.
 
+### Flutter client
+
+The shared cross-platform Flutter client is in
+[`flutter/sabaychat_flutter`](./flutter/sabaychat_flutter). It mirrors the SwiftUI
+chat list, dark design system, profile, privacy/security, and device-session
+screens so the iOS, Android, and Flutter experiences use the same visual language.
+
+Install Flutter, then create the native platform folders once from the Flutter
+client directory and run it:
+
+```bash
+cd flutter/sabaychat_flutter
+flutter create .
+flutter pub get
+flutter run --dart-define=API_BASE_URL=https://chart-ztyk.onrender.com
+```
+
+`API_BASE_URL` is a build-time value. Do not put access tokens, service-role
+keys, database credentials, or other private secrets in the Flutter project.
+The current Flutter screen layer uses the shared backend URL configuration and
+keeps unsupported security actions visibly separate until their server APIs are
+wired.
+
 ## Build and release
 
 GitHub Actions workflows are included for automated Android APK/AAB and iOS IPA generation.
