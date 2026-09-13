@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -13,6 +15,86 @@ const blueDark = Color(0xFF0F4CC9);
 const muted = Color(0xFFA7B0C0);
 const green = Color(0xFF2ECF9A);
 const border = Color(0xFF24324A);
+
+class ApiClient {
+  String? accessToken;
+  String? refreshToken;
+
+  Future<Map<String, dynamic>> authenticate({
+    required String email,
+    required String password,
+    String? name,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/api/auth/${name == null ? 'login' : 'register'}'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim(),
+        'password': password,
+        if (name != null) 'name': name.trim(),
+      }),
+    );
+    final body = _decode(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(body['error']?.toString() ?? 'Authentication failed.');
+    }
+    accessToken = body['accessToken']?.toString() ?? body['token']?.toString();
+    refreshToken = body['refreshToken']?.toString();
+    if (accessToken == null || refreshToken == null) {
+      throw const ApiException('The server returned an incomplete session.');
+    }
+    return body;
+  }
+
+  Future<void> logout() async {
+    final token = accessToken;
+    if (token != null) {
+      await http.post(Uri.parse('$apiBaseUrl/api/auth/logout'),
+          headers: _headers());
+    }
+    accessToken = null;
+    refreshToken = null;
+  }
+
+  Future<List<Chat>> conversations() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/api/conversations'),
+        headers: _headers());
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(
+          body['error']?.toString() ?? 'Could not load conversations.');
+    }
+    return (body as List<dynamic>)
+        .map((item) => Chat.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Chat> createConversation(String name, String type) async {
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/api/conversations'),
+      headers: {..._headers(), 'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'type': type}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 201) {
+      throw ApiException(
+          body['error']?.toString() ?? 'Could not create conversation.');
+    }
+    return Chat.fromJson(body);
+  }
+
+  Map<String, String> _headers() =>
+      {'Authorization': 'Bearer ${accessToken ?? ''}'};
+  dynamic _decode(http.Response response) =>
+      response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+}
+
+class ApiException implements Exception {
+  const ApiException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
 
 void main() {
   runApp(const SabayChatApp());
@@ -62,14 +144,23 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   bool signedIn = false;
+  final client = ApiClient();
   @override
   Widget build(BuildContext context) => signedIn
-      ? HomeShell(onSignOut: () => setState(() => signedIn = false))
-      : WelcomePage(onSignedIn: () => setState(() => signedIn = true));
+      ? HomeShell(
+          client: client,
+          onSignOut: () async {
+            await client.logout();
+            if (mounted) setState(() => signedIn = false);
+          })
+      : WelcomePage(
+          client: client, onSignedIn: () => setState(() => signedIn = true));
 }
 
 class WelcomePage extends StatefulWidget {
-  const WelcomePage({required this.onSignedIn, super.key});
+  const WelcomePage(
+      {required this.client, required this.onSignedIn, super.key});
+  final ApiClient client;
   final VoidCallback onSignedIn;
   @override
   State<WelcomePage> createState() => _WelcomePageState();
@@ -78,6 +169,9 @@ class WelcomePage extends StatefulWidget {
 class _WelcomePageState extends State<WelcomePage> {
   bool registering = false;
   bool obscure = true;
+  bool loading = false;
+  String error = '';
+  final name = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
   @override
@@ -117,8 +211,9 @@ class _WelcomePageState extends State<WelcomePage> {
                         fontSize: 11,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 7),
-                const TextField(
-                    decoration: InputDecoration(
+                TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
                         hintText: 'Your name',
                         prefixIcon: Icon(Icons.person_outline))),
                 const SizedBox(height: 18),
@@ -160,16 +255,42 @@ class _WelcomePageState extends State<WelcomePage> {
                         onPressed: () {},
                         child: const Text('Forgot password?'))),
               const SizedBox(height: 16),
+              if (error.isNotEmpty)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(error,
+                        style: const TextStyle(color: Colors.redAccent))),
               SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: FilledButton(
-                      onPressed: widget.onSignedIn,
+                      onPressed: loading
+                          ? null
+                          : () async {
+                              setState(() {
+                                loading = true;
+                                error = '';
+                              });
+                              try {
+                                await widget.client.authenticate(
+                                    email: email.text,
+                                    password: password.text,
+                                    name: registering ? name.text : null);
+                                widget.onSignedIn();
+                              } catch (exception) {
+                                setState(() => error = exception.toString());
+                              } finally {
+                                if (mounted) setState(() => loading = false);
+                              }
+                            },
                       style: FilledButton.styleFrom(
                           backgroundColor: blue,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16))),
-                      child: Text(registering ? 'Create account' : 'Sign in',
+                      child: Text(
+                          loading
+                              ? 'Please wait...'
+                              : (registering ? 'Create account' : 'Sign in'),
                           style:
                               const TextStyle(fontWeight: FontWeight.bold)))),
               const SizedBox(height: 22),
@@ -221,7 +342,24 @@ class _WelcomePageState extends State<WelcomePage> {
 
 class Chat {
   const Chat(this.name, this.message, this.time, this.color,
-      {this.unread = 0, this.online = false});
+      {this.id = '',
+      this.type = 'direct',
+      this.unread = 0,
+      this.online = false});
+  factory Chat.fromJson(Map<String, dynamic> json) => Chat(
+        (json['name'] ?? 'Conversation').toString(),
+        json['type'] == 'channel'
+            ? 'Channel'
+            : (json['type'] == 'group' ? 'Group' : 'No messages yet'),
+        '',
+        json['type'] == 'channel'
+            ? const Color(0xFFFF9F43)
+            : (json['type'] == 'group' ? const Color(0xFF8B5CF6) : blue),
+        id: json['id']?.toString() ?? '',
+        type: json['type']?.toString() ?? 'direct',
+      );
+  final String id;
+  final String type;
   final String name;
   final String message;
   final String time;
@@ -242,7 +380,8 @@ const chats = [
 ];
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({required this.onSignOut, super.key});
+  const HomeShell({required this.client, required this.onSignOut, super.key});
+  final ApiClient client;
   final VoidCallback onSignOut;
 
   @override
@@ -258,6 +397,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final pages = [
       ChatListPage(
+          client: widget.client,
           search: search,
           filter: filter,
           onSearch: (v) => setState(() => search = v),
@@ -374,13 +514,25 @@ class _HomeShellState extends State<HomeShell> {
               SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                      onPressed: () {
+                      onPressed: () async {
                         final name = controller.text.trim();
                         if (name.isEmpty) return;
-                        Navigator.pop(sheetContext);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(
-                                '${type == 'group' ? 'Group' : 'Channel'} creation requires an authenticated session.')));
+                        final navigator = Navigator.of(sheetContext);
+                        final messenger = ScaffoldMessenger.of(context);
+                        try {
+                          final created = await widget.client
+                              .createConversation(name, type);
+                          if (!mounted) return;
+                          navigator.pop();
+                          messenger.showSnackBar(SnackBar(
+                              content: Text(
+                                  '${created.name} created successfully.')));
+                          setState(() {});
+                        } catch (exception) {
+                          if (!mounted) return;
+                          messenger.showSnackBar(
+                              SnackBar(content: Text(exception.toString())));
+                        }
                       },
                       child: Text(
                           'Create ${type == 'group' ? 'group' : 'channel'}'))),
@@ -416,28 +568,41 @@ class _CreateOption extends StatelessWidget {
 
 class ChatListPage extends StatelessWidget {
   const ChatListPage(
-      {required this.search,
+      {required this.client,
+      required this.search,
       required this.filter,
       required this.onSearch,
       required this.onFilter,
       super.key});
   final String search;
+  final ApiClient client;
   final String filter;
   final ValueChanged<String> onSearch;
   final ValueChanged<String> onFilter;
 
   @override
   Widget build(BuildContext context) {
-    final visible = chats.where((chat) {
-      final matchesSearch =
-          chat.name.toLowerCase().contains(search.toLowerCase());
-      final matchesFilter = filter == 'All' ||
-          (filter == 'Groups'
-              ? chat.name.contains('Community') || chat.name.contains('News')
-              : !chat.name.contains('Community') &&
-                  !chat.name.contains('News'));
-      return matchesSearch && matchesFilter;
-    }).toList();
+    return FutureBuilder<List<Chat>>(
+      future: client.conversations(),
+      builder: (context, snapshot) {
+        final serverChats = snapshot.data;
+        final source =
+            serverChats == null || serverChats.isEmpty ? chats : serverChats;
+        final filteredChats = source.where((chat) {
+          final matchesSearch =
+              chat.name.toLowerCase().contains(search.toLowerCase());
+          final matchesFilter = filter == 'All' ||
+              (filter == 'Groups'
+                  ? chat.type == 'group' || chat.type == 'channel'
+                  : chat.type == 'direct');
+          return matchesSearch && matchesFilter;
+        }).toList();
+        return _chatScroll(context, filteredChats);
+      },
+    );
+  }
+
+  Widget _chatScroll(BuildContext context, List<Chat> visible) {
     return CustomScrollView(
       slivers: [
         SliverPadding(
