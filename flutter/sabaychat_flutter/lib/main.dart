@@ -88,7 +88,7 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: tab,
         onDestinationSelected: (value) => setState(() => tab = value),
         backgroundColor: surface,
-        indicatorColor: blue.withOpacity(.22),
+        indicatorColor: blue.withValues(alpha: .22),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chats'),
           NavigationDestination(icon: Icon(Icons.call_outlined), selectedIcon: Icon(Icons.call), label: 'Calls'),
@@ -152,9 +152,43 @@ class ChatListPage extends StatelessWidget {
           ])),
         ),
         SliverPadding(padding: const EdgeInsets.fromLTRB(20, 14, 20, 8), sliver: SliverToBoxAdapter(child: TextField(onChanged: onSearch, decoration: const InputDecoration(hintText: 'Search chats, groups, and people...', prefixIcon: Icon(Icons.search))))),
-        SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4), sliver: SliverToBoxAdapter(child: Row(children: ['All', 'Personal', 'Groups'].map((item) => Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(item), selected: filter == item, onSelected: (_) => onFilter(item), selectedColor: blue, backgroundColor: surface)).toList()))),
-        if (visible.isEmpty) const SliverFillRemaining(child: EmptyFeature(icon: Icons.forum_outlined, title: 'No chats yet', detail: 'Start a conversation to see it here.'))
-        else SliverPadding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), sliver: SliverList(delegate: SliverChildBuilderDelegate((context, index) => ChatRow(chat: visible[index]), childCount: visible.length))),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          sliver: SliverToBoxAdapter(
+            child: Row(
+              children: ['All', 'Personal', 'Groups']
+                  .map((item) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(item),
+                          selected: filter == item,
+                          onSelected: (_) => onFilter(item),
+                          selectedColor: blue,
+                          backgroundColor: surface,
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ),
+        if (visible.isEmpty)
+          const SliverFillRemaining(
+            child: EmptyFeature(
+              icon: Icons.forum_outlined,
+              title: 'No chats yet',
+              detail: 'Start a conversation to see it here.',
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => ChatRow(chat: visible[index]),
+                childCount: visible.length,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -175,7 +209,7 @@ class ChatRow extends StatelessWidget {
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(chat: chat))),
         child: Padding(padding: const EdgeInsets.all(13), child: Row(children: [
           Stack(children: [
-            CircleAvatar(radius: 27, backgroundColor: chat.color.withOpacity(.25), child: Text(chat.name.substring(0, 1), style: TextStyle(color: chat.color, fontSize: 20, fontWeight: FontWeight.bold))),
+            CircleAvatar(radius: 27, backgroundColor: chat.color.withValues(alpha: .25), child: Text(chat.name.substring(0, 1), style: TextStyle(color: chat.color, fontSize: 20, fontWeight: FontWeight.bold))),
             if (chat.online) Positioned(right: 0, bottom: 1, child: Container(width: 13, height: 13, decoration: BoxDecoration(color: green, shape: BoxShape.circle, border: Border.all(color: surface, width: 2)))),
           ]),
           const SizedBox(width: 13),
@@ -199,7 +233,7 @@ class _ChatPageState extends State<ChatPage> {
   final messages = <String>['Welcome to SabayChat!', 'This chat uses the secure SabayChat server.'];
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Row(children: [CircleAvatar(radius: 17, backgroundColor: widget.chat.color.withOpacity(.25), child: Text(widget.chat.name[0], style: TextStyle(color: widget.chat.color))), const SizedBox(width: 10), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.chat.name, style: const TextStyle(fontSize: 16)), Text(widget.chat.online ? 'online' : 'last seen recently', style: const TextStyle(color: muted, fontSize: 11))])]), actions: [IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert))]),
+    appBar: AppBar(title: Row(children: [CircleAvatar(radius: 17, backgroundColor: widget.chat.color.withValues(alpha: .25), child: Text(widget.chat.name[0], style: TextStyle(color: widget.chat.color))), const SizedBox(width: 10), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(widget.chat.name, style: const TextStyle(fontSize: 16)), Text(widget.chat.online ? 'online' : 'last seen recently', style: const TextStyle(color: muted, fontSize: 11))])]), actions: [IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert))]),
     body: Column(children: [
       Expanded(child: ListView.builder(padding: const EdgeInsets.all(18), itemCount: messages.length, itemBuilder: (_, index) => Align(alignment: Alignment.centerLeft, child: Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11), decoration: BoxDecoration(color: elevated, borderRadius: BorderRadius.circular(17)), child: Text(messages[index]))))),
       Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 12), child: Row(children: [Expanded(child: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Message...'))), const SizedBox(width: 8), IconButton(onPressed: () { if (controller.text.trim().isNotEmpty) setState(() { messages.add(controller.text.trim()); controller.clear(); }); }, icon: const Icon(Icons.send_rounded, color: blue))])),
@@ -222,7 +256,7 @@ class SettingsPage extends StatelessWidget {
     SettingsTile(icon: Icons.notifications_none, title: 'Notifications', detail: 'Messages and sound preferences', onTap: () {}),
     SettingsTile(icon: Icons.workspace_premium_outlined, title: 'Premium', detail: 'Unlock your verification badge', onTap: () {}),
     const SizedBox(height: 20),
-    Text('API: $apiBaseUrl', style: const TextStyle(color: muted, fontSize: 11)),
+    const Text('API: $apiBaseUrl', style: TextStyle(color: muted, fontSize: 11)),
   ]);
 }
 
@@ -239,11 +273,11 @@ class SettingsTile extends StatelessWidget {
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Profile')), body: ListView(padding: const EdgeInsets.all(24), children: [
-    const Center(child: CircleAvatar(radius: 52, backgroundColor: blue, child: Icon(Icons.person, size: 54))),
-    const SizedBox(height: 16), const Center(child: Text('SabayChat User', style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold))), const Center(child: Text('@sabayuser', style: TextStyle(color: muted))), const SizedBox(height: 28),
-    const InfoCard(label: 'Email', value: 'Your verified email'), const InfoCard(label: 'Account status', value: 'Active'), const InfoCard(label: 'Plan', value: 'Free plan'),
-  ]);
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Profile')), body: ListView(padding: const EdgeInsets.all(24), children: const [
+    Center(child: CircleAvatar(radius: 52, backgroundColor: blue, child: Icon(Icons.person, size: 54))),
+    SizedBox(height: 16), Center(child: Text('SabayChat User', style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold))), Center(child: Text('@sabayuser', style: TextStyle(color: muted))), SizedBox(height: 28),
+    InfoCard(label: 'Email', value: 'Your verified email'), InfoCard(label: 'Account status', value: 'Active'), InfoCard(label: 'Plan', value: 'Free plan'),
+  ]));
 }
 
 class InfoCard extends StatelessWidget {
@@ -269,11 +303,22 @@ class _PrivacyPageState extends State<PrivacyPage> {
     SettingsTile(icon: Icons.block, title: 'Blocked Users', detail: 'Manage who cannot contact you', onTap: () {}),
     SettingsTile(icon: Icons.language, title: 'Active Websites', detail: 'Review active connections', onTap: () {}),
     SettingsTile(icon: Icons.face, title: 'Passcode & Face ID', detail: 'Keep your app locked and secure', onTap: () {}),
-    Card(color: surface, child: SwitchListTile.secondary(value: twoStep, onChanged: (v) => setState(() => twoStep = v), title: const Text('Two-Step Verification'), subtitle: const Text('Add an extra layer of security', style: TextStyle(color: muted)))),
+    Card(
+      color: surface,
+      child: SwitchListTile(
+        value: twoStep,
+        onChanged: (v) => setState(() => twoStep = v),
+        title: const Text('Two-Step Verification'),
+        subtitle: const Text(
+          'Add an extra layer of security',
+          style: TextStyle(color: muted),
+        ),
+      ),
+    ),
     const SizedBox(height: 16), const Text('ACCOUNT ACCESS', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.bold)),
     SettingsTile(icon: Icons.key, title: 'Passkey', detail: 'Use a passkey for faster sign in', onTap: () {}),
     SettingsTile(icon: Icons.devices, title: 'Devices & Sessions', detail: 'Review signed-in devices', onTap: () {}),
-  ]);
+  ]));
 }
 
 class DevicesPage extends StatelessWidget {
@@ -283,7 +328,7 @@ class DevicesPage extends StatelessWidget {
     const Text('ACTIVE SESSION', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.bold)),
     const SizedBox(height: 8), const SettingsTile(icon: Icons.phone_iphone, title: 'This device', detail: 'iOS or Android • Active now', onTap: _noop),
     const SizedBox(height: 18), FilledButton.tonal(onPressed: () {}, child: const Text('Log out of all other devices')),
-  ]);
+  ]));
 }
 
 void _noop() {}

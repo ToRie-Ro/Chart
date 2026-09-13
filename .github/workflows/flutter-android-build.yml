@@ -31,6 +31,14 @@ jobs:
         working-directory: flutter/sabaychat_flutter
         run: flutter pub get
 
+      - name: Analyze Flutter source
+        working-directory: flutter/sabaychat_flutter
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: flutter/sabaychat_flutter
+        run: flutter test
+
       - name: Build release APK
         working-directory: flutter/sabaychat_flutter
         run: flutter build apk --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
