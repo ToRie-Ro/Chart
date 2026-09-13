@@ -24,7 +24,7 @@ class SabayChatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SabayChat',
+      title: 'SabayChart',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -49,9 +49,174 @@ class SabayChatApp extends StatelessWidget {
               borderSide: const BorderSide(color: blue)),
         ),
       ),
-      home: const HomeShell(),
+      home: const AuthGate(),
     );
   }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool signedIn = false;
+  @override
+  Widget build(BuildContext context) => signedIn
+      ? HomeShell(onSignOut: () => setState(() => signedIn = false))
+      : WelcomePage(onSignedIn: () => setState(() => signedIn = true));
+}
+
+class WelcomePage extends StatefulWidget {
+  const WelcomePage({required this.onSignedIn, super.key});
+  final VoidCallback onSignedIn;
+  @override
+  State<WelcomePage> createState() => _WelcomePageState();
+}
+
+class _WelcomePageState extends State<WelcomePage> {
+  bool registering = false;
+  bool obscure = true;
+  final email = TextEditingController();
+  final password = TextEditingController();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFFF5F8FD),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(
+                  child: Image.asset('assets/app_icon.png',
+                      width: 94, height: 94)),
+              const SizedBox(height: 22),
+              Center(
+                  child: Text(
+                      registering
+                          ? 'Create your account'
+                          : 'Welcome to SabayChart',
+                      style: const TextStyle(
+                          color: Color(0xFF152238),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800))),
+              const SizedBox(height: 8),
+              Center(
+                  child: Text(
+                      registering
+                          ? 'Connect securely with your community.'
+                          : 'Fast, private messaging for everyone.',
+                      style: const TextStyle(
+                          color: Color(0xFF70809A), fontSize: 14))),
+              const SizedBox(height: 34),
+              if (registering) ...[
+                const Text('DISPLAY NAME',
+                    style: TextStyle(
+                        color: Color(0xFF70809A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 7),
+                const TextField(
+                    decoration: InputDecoration(
+                        hintText: 'Your name',
+                        prefixIcon: Icon(Icons.person_outline))),
+                const SizedBox(height: 18),
+              ],
+              const Text('EMAIL ADDRESS',
+                  style: TextStyle(
+                      color: Color(0xFF70809A),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 7),
+              TextField(
+                  controller: email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                      hintText: 'name@example.com',
+                      prefixIcon: Icon(Icons.mail_outline))),
+              const SizedBox(height: 18),
+              const Text('PASSWORD',
+                  style: TextStyle(
+                      color: Color(0xFF70809A),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 7),
+              TextField(
+                  controller: password,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                      hintText: 'At least 6 characters',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                          onPressed: () => setState(() => obscure = !obscure),
+                          icon: Icon(obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined)))),
+              if (!registering)
+                Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                        onPressed: () {},
+                        child: const Text('Forgot password?'))),
+              const SizedBox(height: 16),
+              SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: FilledButton(
+                      onPressed: widget.onSignedIn,
+                      style: FilledButton.styleFrom(
+                          backgroundColor: blue,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16))),
+                      child: Text(registering ? 'Create account' : 'Sign in',
+                          style:
+                              const TextStyle(fontWeight: FontWeight.bold)))),
+              const SizedBox(height: 22),
+              const Row(children: [
+                Expanded(child: Divider(color: Color(0xFFD9E1ED))),
+                Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('OR',
+                        style: TextStyle(
+                            color: Color(0xFF8A98AC),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold))),
+                Expanded(child: Divider(color: Color(0xFFD9E1ED)))
+              ]),
+              const SizedBox(height: 18),
+              SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.apple, color: Colors.black),
+                      label: const Text('Continue with Apple',
+                          style: TextStyle(
+                              color: Color(0xFF152238),
+                              fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD9E1ED)),
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16))))),
+              const SizedBox(height: 18),
+              Center(
+                  child: TextButton(
+                      onPressed: () =>
+                          setState(() => registering = !registering),
+                      child: Text(registering
+                          ? 'Already have an account? Sign in'
+                          : 'New to SabayChart? Create account'))),
+              const SizedBox(height: 20),
+              const Center(
+                  child: Text('Secure connection • Made in Cambodia 🇰🇭',
+                      style:
+                          TextStyle(color: Color(0xFF8A98AC), fontSize: 11))),
+            ]),
+          ),
+        ),
+      );
 }
 
 class Chat {
@@ -77,7 +242,8 @@ const chats = [
 ];
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  const HomeShell({required this.onSignOut, super.key});
+  final VoidCallback onSignOut;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -101,7 +267,7 @@ class _HomeShellState extends State<HomeShell> {
               icon: Icons.call_outlined,
               title: 'Calls',
               detail: 'Your secure calls will appear here.')),
-      const SettingsPage(),
+      SettingsPage(onSignOut: widget.onSignOut),
     ];
     return Scaffold(
       body: SafeArea(child: pages[tab]),
@@ -500,7 +666,8 @@ class _ChatPageState extends State<ChatPage> {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({required this.onSignOut, super.key});
+  final VoidCallback onSignOut;
   @override
   Widget build(BuildContext context) =>
       ListView(padding: const EdgeInsets.fromLTRB(20, 20, 20, 30), children: [
@@ -548,6 +715,11 @@ class SettingsPage extends StatelessWidget {
         const SizedBox(height: 20),
         const Text('API: $apiBaseUrl',
             style: TextStyle(color: muted, fontSize: 11)),
+        const SizedBox(height: 18),
+        OutlinedButton.icon(
+            onPressed: onSignOut,
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out')),
       ]);
 }
 

@@ -6,7 +6,7 @@ void main() {
   testWidgets('renders the SabayChat home shell', (WidgetTester tester) async {
     await tester.pumpWidget(const SabayChatApp());
 
-    expect(find.text('SabayChat'), findsOneWidget);
-    expect(find.text('SabayChat Team'), findsOneWidget);
+    expect(find.text('Welcome to SabayChart'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
   });
 }

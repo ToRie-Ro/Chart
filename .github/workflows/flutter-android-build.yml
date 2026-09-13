@@ -25,11 +25,19 @@ jobs:
 
       - name: Generate Android platform files
         working-directory: flutter/sabaychat_flutter
-        run: flutter create . --platforms=android --project-name sabaychat_flutter
+        run: |
+          flutter create . --platforms=android --project-name sabaychart
+          mkdir -p assets
+          cp ../../ios/SabayChat-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png assets/app_icon.png
+          sed -i -e 's/android:label="sabaychat_flutter"/android:label="SabayChart"/' -e 's/android:label="sabaychart"/android:label="SabayChart"/' android/app/src/main/AndroidManifest.xml
 
       - name: Install Flutter dependencies
         working-directory: flutter/sabaychat_flutter
         run: flutter pub get
+
+      - name: Generate SabayChart app icon
+        working-directory: flutter/sabaychat_flutter
+        run: dart run flutter_launcher_icons
 
       - name: Analyze Flutter source
         working-directory: flutter/sabaychat_flutter

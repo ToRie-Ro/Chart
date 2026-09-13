@@ -31,11 +31,20 @@ jobs:
 
       - name: Generate iOS platform files
         working-directory: flutter/sabaychat_flutter
-        run: flutter create . --platforms=ios --project-name sabaychat_flutter
+        run: |
+          flutter create . --platforms=ios --project-name sabaychart
+          mkdir -p assets
+          cp ../../ios/SabayChat-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png assets/app_icon.png
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SabayChart" ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName SabayChart" ios/Runner/Info.plist
 
       - name: Install dependencies
         working-directory: flutter/sabaychat_flutter
         run: flutter pub get
+
+      - name: Generate SabayChart app icon
+        working-directory: flutter/sabaychat_flutter
+        run: dart run flutter_launcher_icons
 
       - name: Analyze and test
         working-directory: flutter/sabaychat_flutter
