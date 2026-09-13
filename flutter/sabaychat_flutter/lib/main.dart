@@ -486,11 +486,12 @@ class _ChatPageState extends State<ChatPage> {
                 const SizedBox(width: 8),
                 IconButton(
                     onPressed: () {
-                      if (controller.text.trim().isNotEmpty)
+                      if (controller.text.trim().isNotEmpty) {
                         setState(() {
                           messages.add(controller.text.trim());
                           controller.clear();
                         });
+                      }
                     },
                     icon: const Icon(Icons.send_rounded, color: blue))
               ])),
