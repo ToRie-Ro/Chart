@@ -160,6 +160,10 @@ The downloaded `app-release.apk` can be installed on an Android emulator or
 Android device. This build is unsigned for testing; configure Android signing
 secrets before distributing it through Google Play.
 
+The workflow generates Flutter's Android host files during the build. This is
+intentional because the repository-wide Android ignore rule excludes generated
+Flutter platform folders from source control.
+
 ### iOS IPA test build
 
 The iOS project now includes the SabayChart app icon in `ios/SabayChat-iOS/Assets.xcassets` and uses the `com.sabaychart.ios` bundle identifier. On a Mac with Xcode 26 installed:
