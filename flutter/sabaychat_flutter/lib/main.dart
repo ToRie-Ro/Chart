@@ -176,7 +176,7 @@ class _WelcomePageState extends State<WelcomePage> {
   final password = TextEditingController();
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFFF5F8FD),
+        backgroundColor: navy,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
@@ -192,7 +192,7 @@ class _WelcomePageState extends State<WelcomePage> {
                           ? 'Create your account'
                           : 'Welcome to SabayChart',
                       style: const TextStyle(
-                          color: Color(0xFF152238),
+                          color: Colors.white,
                           fontSize: 28,
                           fontWeight: FontWeight.w800))),
               const SizedBox(height: 8),
@@ -201,13 +201,12 @@ class _WelcomePageState extends State<WelcomePage> {
                       registering
                           ? 'Connect securely with your community.'
                           : 'Fast, private messaging for everyone.',
-                      style: const TextStyle(
-                          color: Color(0xFF70809A), fontSize: 14))),
+                      style: const TextStyle(color: muted, fontSize: 14))),
               const SizedBox(height: 34),
               if (registering) ...[
                 const Text('DISPLAY NAME',
                     style: TextStyle(
-                        color: Color(0xFF70809A),
+                        color: muted,
                         fontSize: 11,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 7),
@@ -220,9 +219,7 @@ class _WelcomePageState extends State<WelcomePage> {
               ],
               const Text('EMAIL ADDRESS',
                   style: TextStyle(
-                      color: Color(0xFF70809A),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
+                      color: muted, fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 7),
               TextField(
                   controller: email,
@@ -233,9 +230,7 @@ class _WelcomePageState extends State<WelcomePage> {
               const SizedBox(height: 18),
               const Text('PASSWORD',
                   style: TextStyle(
-                      color: Color(0xFF70809A),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
+                      color: muted, fontSize: 11, fontWeight: FontWeight.bold)),
               const SizedBox(height: 7),
               TextField(
                   controller: password,
@@ -295,15 +290,15 @@ class _WelcomePageState extends State<WelcomePage> {
                               const TextStyle(fontWeight: FontWeight.bold)))),
               const SizedBox(height: 22),
               const Row(children: [
-                Expanded(child: Divider(color: Color(0xFFD9E1ED))),
+                Expanded(child: Divider(color: border)),
                 Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Text('OR',
                         style: TextStyle(
-                            color: Color(0xFF8A98AC),
+                            color: muted,
                             fontSize: 11,
                             fontWeight: FontWeight.bold))),
-                Expanded(child: Divider(color: Color(0xFFD9E1ED)))
+                Expanded(child: Divider(color: border))
               ]),
               const SizedBox(height: 18),
               SizedBox(
@@ -311,14 +306,14 @@ class _WelcomePageState extends State<WelcomePage> {
                   height: 52,
                   child: OutlinedButton.icon(
                       onPressed: () {},
-                      icon: const Icon(Icons.apple, color: Colors.black),
+                      icon: const Icon(Icons.apple, color: Colors.white),
                       label: const Text('Continue with Apple',
                           style: TextStyle(
-                              color: Color(0xFF152238),
+                              color: Colors.white,
                               fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFD9E1ED)),
-                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: border),
+                          backgroundColor: surface,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16))))),
               const SizedBox(height: 18),
@@ -332,8 +327,7 @@ class _WelcomePageState extends State<WelcomePage> {
               const SizedBox(height: 20),
               const Center(
                   child: Text('Secure connection • Made in Cambodia 🇰🇭',
-                      style:
-                          TextStyle(color: Color(0xFF8A98AC), fontSize: 11))),
+                      style: TextStyle(color: muted, fontSize: 11))),
             ]),
           ),
         ),
