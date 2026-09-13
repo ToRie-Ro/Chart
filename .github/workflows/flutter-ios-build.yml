@@ -32,7 +32,7 @@ jobs:
       - name: Generate iOS platform files
         working-directory: flutter/sabaychat_flutter
         run: |
-          flutter create . --platforms=ios --project-name sabaychart
+          flutter create . --platforms=android,ios --project-name sabaychart
           mkdir -p assets
           cp ../../ios/SabayChat-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png assets/app_icon.png
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SabayChart" ios/Runner/Info.plist
