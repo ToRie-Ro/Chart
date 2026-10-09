@@ -12,6 +12,7 @@ import { ChatDashboard } from './pages/ChatDashboard';
 import { ContactsPage } from './pages/ContactsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { DevicePage } from './pages/DevicePage';
 
 // Protected route guard — only real Supabase auth
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -72,12 +73,15 @@ export const App: React.FC = () => {
             <Route path="/app/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/app/profile/:id" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/app/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/app/settings/device" element={<ProtectedRoute><DevicePage /></ProtectedRoute>} />
+            <Route path="/app/device" element={<ProtectedRoute><DevicePage /></ProtectedRoute>} />
             <Route path="/app/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
 
             {/* Legacy paths */}
             <Route path="/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/device" element={<ProtectedRoute><DevicePage /></ProtectedRoute>} />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />

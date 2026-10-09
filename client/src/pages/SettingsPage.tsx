@@ -209,74 +209,39 @@ export const SettingsPage: React.FC = () => {
             </form>
           </Panel>
 
-          {/* ── Device ──────────────────────────────────────────────────────── */}
-          <SettingRow
-            icon={deviceInfo?.deviceType === 'Mobile' ? <Smartphone className="w-5 h-5" /> : deviceInfo?.deviceType === 'Tablet' ? <Smartphone className="w-5 h-5" /> : deviceInfo?.deviceType === 'Laptop' ? <Laptop className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
-            iconBg="bg-emerald-500/10 text-emerald-400"
-            title="This Device"
-            subtitle={deviceInfo ? `${deviceInfo.deviceName} • ${deviceInfo.browser}` : 'Detecting hardware & browser...'}
-            open={panel === 'device'}
-            onClick={() => toggle('device')}
-          />
-          <Panel open={panel === 'device'}>
-            {/* Active Device Highlight Card */}
-            <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-slate-800/60 to-slate-800/30 border border-emerald-500/20 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  {deviceInfo?.deviceType === 'Mobile' ? <Smartphone className="w-5 h-5" /> : deviceInfo?.deviceType === 'Laptop' ? <Laptop className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">{deviceInfo?.deviceName || 'Current Device'}</span>
-                    <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Active Now
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {deviceInfo?.os} • {deviceInfo?.browser}
-                  </p>
-                </div>
+          {/* ── Device (Shows only device, full specs on dedicated page) ── */}
+          <button
+            onClick={() => navigate('/app/settings/device')}
+            className="w-full p-4 flex items-center gap-3.5 hover:bg-slate-800/50 transition text-left group"
+          >
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 flex-shrink-0 group-hover:bg-emerald-500/20 transition">
+              {deviceInfo?.deviceType === 'Mobile' ? (
+                <Smartphone className="w-5 h-5" />
+              ) : deviceInfo?.deviceType === 'Laptop' ? (
+                <Laptop className="w-5 h-5" />
+              ) : (
+                <Monitor className="w-5 h-5" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-white truncate">
+                  {deviceInfo?.deviceName || 'This Device'}
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex-shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Active
+                </span>
               </div>
-            </div>
-
-            {/* Hardware & Environment Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              {[
-                { icon: Smartphone, label: 'Device Model', value: deviceInfo?.deviceName || 'Detecting...' },
-                { icon: Cpu, label: 'Operating System', value: deviceInfo?.os || 'Detecting...' },
-                { icon: Globe, label: 'Web Browser', value: deviceInfo?.browser || 'Detecting...' },
-                ...(deviceInfo?.gpu ? [{ icon: Layers, label: 'Graphics Card (GPU)', value: deviceInfo.gpu }] : []),
-                ...(deviceInfo?.cpuCores ? [{ icon: Cpu, label: 'Processor Cores', value: deviceInfo.cpuCores }] : []),
-                ...(deviceInfo?.ram ? [{ icon: HardDrive, label: 'Device Memory (RAM)', value: deviceInfo.ram }] : []),
-                { icon: Monitor, label: 'Screen Resolution', value: deviceInfo?.screen || `${window.screen.width} × ${window.screen.height} px` },
-                { icon: Monitor, label: 'Display Scaling', value: deviceInfo?.displayScale || '1x (100%)' },
-                { icon: Smartphone, label: 'Touchscreen', value: deviceInfo?.touchSupport || 'No Touch' },
-                { icon: Wifi, label: 'Connection Status', value: deviceInfo?.network || (navigator.onLine ? 'Online' : 'Offline') },
-                ...(deviceInfo?.battery ? [{ icon: Battery, label: 'Battery', value: deviceInfo.battery }] : []),
-                { icon: Globe, label: 'Timezone & Region', value: `${deviceInfo?.timezone || 'Local'} (${deviceInfo?.language || 'en'})` },
-                { icon: Clock, label: 'Local Time', value: now.toLocaleString() },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="p-3 rounded-xl bg-slate-850/60 border border-slate-800/80 flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-slate-800 text-slate-400 flex-shrink-0 mt-0.5">
-                    <Icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-                    <p className="text-xs text-slate-200 font-medium break-words leading-relaxed mt-0.5">{value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Collapsible / Clean User Agent display */}
-            <div className="pt-2 border-t border-slate-850">
-              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-1">Raw User-Agent</p>
-              <p className="text-[10px] font-mono text-slate-400 break-all leading-relaxed p-2.5 rounded-lg bg-slate-950 border border-slate-850">
-                {deviceInfo?.userAgent || navigator.userAgent}
+              <p className="text-xs text-slate-400 truncate mt-0.5">
+                {deviceInfo ? `${deviceInfo.os} • ${deviceInfo.browser}` : 'Detecting hardware & browser...'}
               </p>
             </div>
-          </Panel>
+            <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-cyan-400 transition flex-shrink-0 text-xs font-medium">
+              <span className="hidden sm:inline">Details</span>
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </button>
 
           {/* ── Notifications ────────────────────────────────────────────────── */}
           <SettingRow icon={<Bell className="w-5 h-5" />} iconBg="bg-amber-500/10 text-amber-400"
