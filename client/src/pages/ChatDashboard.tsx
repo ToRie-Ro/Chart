@@ -1,511 +1,369 @@
-import React, { useState, useEffect } from 'react';
-import { Navbar } from '../components/Navbar';
-import { MobileNav } from '../components/MobileNav';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LogOut, Settings, User as UserIcon, Waves, Loader2 } from 'lucide-react';
+import { Conversation, Message, UserProfile } from '../lib/types';
 import { ChatList } from '../components/ChatList';
 import { ChatArea } from '../components/ChatArea';
 import { NewChatModal } from '../components/NewChatModal';
-import { Conversation, Message, UserProfile } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { api } from '../lib/api';
-import { useNavigate } from 'react-router-dom';
-
-// Demo conversations matching reference screenshot #5
-const INITIAL_DEMO_CONVERSATIONS: Conversation[] = [
-  {
-    id: 'conv-alex',
-    is_group: false,
-    created_at: '2026-10-09T08:00:00Z',
-    updated_at: '2026-10-09T10:24:00Z',
-    unread_count: 5,
-    members: [
-      {
-        id: 'm-1',
-        conversation_id: 'conv-alex',
-        user_id: 'user-alex',
-        role: 'member',
-        joined_at: '2026-10-09T08:00:00Z',
-        last_read_at: '2026-10-09T08:00:00Z',
-        profiles: {
-          id: 'user-alex',
-          display_name: 'Alex Johnson',
-          username: 'alexsj',
-          avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          bio: "Just a guy who loves tech, travel and good conversations. Let's connect! 🚀",
-          status: 'online',
-        },
-      },
-    ],
-    last_message: {
-      id: 'msg-alex-last',
-      content: 'Hey! How are you today?',
-      sender_id: 'user-alex',
-      created_at: '2026-10-09T10:24:00Z',
-    },
-  },
-  {
-    id: 'conv-sarah',
-    is_group: false,
-    created_at: '2026-10-09T07:00:00Z',
-    updated_at: '2026-10-09T09:42:00Z',
-    unread_count: 0,
-    members: [
-      {
-        id: 'm-2',
-        conversation_id: 'conv-sarah',
-        user_id: 'user-sarah',
-        role: 'member',
-        joined_at: '2026-10-09T07:00:00Z',
-        last_read_at: '2026-10-09T09:42:00Z',
-        profiles: {
-          id: 'user-sarah',
-          display_name: 'Sarah Wilson',
-          username: 'sarahw',
-          avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-          status: 'online',
-        },
-      },
-    ],
-    last_message: {
-      id: 'msg-sarah-last',
-      content: 'Sounds great! 👍',
-      sender_id: 'user-sarah',
-      created_at: '2026-10-09T09:42:00Z',
-    },
-  },
-  {
-    id: 'conv-design',
-    title: 'Design Team',
-    is_group: true,
-    created_at: '2026-10-08T12:00:00Z',
-    updated_at: '2026-10-09T09:15:00Z',
-    unread_count: 0,
-    members: [],
-    last_message: {
-      id: 'msg-design-last',
-      content: 'Meeting at 2 PM',
-      sender_id: 'other',
-      created_at: '2026-10-09T09:15:00Z',
-    },
-  },
-  {
-    id: 'conv-mike',
-    is_group: false,
-    created_at: '2026-10-08T10:00:00Z',
-    updated_at: '2026-10-09T08:33:00Z',
-    unread_count: 0,
-    members: [
-      {
-        id: 'm-4',
-        conversation_id: 'conv-mike',
-        user_id: 'user-mike',
-        role: 'member',
-        joined_at: '2026-10-08T10:00:00Z',
-        last_read_at: '2026-10-09T08:33:00Z',
-        profiles: {
-          id: 'user-mike',
-          display_name: 'Mike Chen',
-          username: 'mikec',
-          avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-          status: 'offline',
-        },
-      },
-    ],
-    last_message: {
-      id: 'msg-mike-last',
-      content: 'Check this out!',
-      sender_id: 'user-mike',
-      created_at: '2026-10-09T08:33:00Z',
-    },
-  },
-  {
-    id: 'conv-family',
-    title: 'Family Group',
-    is_group: true,
-    created_at: '2026-10-07T14:00:00Z',
-    updated_at: '2026-10-08T20:00:00Z',
-    unread_count: 0,
-    members: [],
-    last_message: {
-      id: 'msg-fam-last',
-      content: 'Dinner tonight? 🍷',
-      sender_id: 'other',
-      created_at: '2026-10-08T20:00:00Z',
-    },
-  },
-  {
-    id: 'conv-emma',
-    is_group: false,
-    created_at: '2026-10-07T09:00:00Z',
-    updated_at: '2026-10-08T18:00:00Z',
-    unread_count: 0,
-    members: [
-      {
-        id: 'm-6',
-        conversation_id: 'conv-emma',
-        user_id: 'user-emma',
-        role: 'member',
-        joined_at: '2026-10-07T09:00:00Z',
-        last_read_at: '2026-10-08T18:00:00Z',
-        profiles: {
-          id: 'user-emma',
-          display_name: 'Emma Davis',
-          username: 'emmad',
-          avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&auto=format&fit=crop&q=80',
-          status: 'online',
-        },
-      },
-    ],
-    last_message: {
-      id: 'msg-emma-last',
-      content: 'See you soon!',
-      sender_id: 'user-emma',
-      created_at: '2026-10-08T18:00:00Z',
-    },
-  },
-  {
-    id: 'conv-alpha',
-    title: 'Project Alpha',
-    is_group: true,
-    created_at: '2026-10-06T10:00:00Z',
-    updated_at: '2026-10-08T15:30:00Z',
-    unread_count: 0,
-    members: [],
-    last_message: {
-      id: 'msg-alpha-last',
-      content: 'Uploaded project specs',
-      attachment_name: 'design_v2.pdf',
-      sender_id: 'other',
-      created_at: '2026-10-08T15:30:00Z',
-    },
-  },
-  {
-    id: 'conv-daniel',
-    is_group: false,
-    created_at: '2026-10-05T12:00:00Z',
-    updated_at: '2026-10-06T11:00:00Z',
-    unread_count: 0,
-    members: [
-      {
-        id: 'm-8',
-        conversation_id: 'conv-daniel',
-        user_id: 'user-daniel',
-        role: 'member',
-        joined_at: '2026-10-05T12:00:00Z',
-        last_read_at: '2026-10-06T11:00:00Z',
-        profiles: {
-          id: 'user-daniel',
-          display_name: 'Daniel Brown',
-          username: 'danielb',
-          avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-          status: 'away',
-        },
-      },
-    ],
-    last_message: {
-      id: 'msg-dan-last',
-      content: 'Alright, got it.',
-      sender_id: 'user-daniel',
-      created_at: '2026-10-06T11:00:00Z',
-    },
-  },
-];
-
-// Initial messages for the Alex conversation (matching reference screenshot #5)
-const INITIAL_ALEX_MESSAGES: Message[] = [
-  {
-    id: 'm-init-1',
-    conversation_id: 'conv-alex',
-    sender_id: 'user-alex',
-    content: 'Hey! How are you today?',
-    created_at: '2026-10-09T10:18:00Z',
-    updated_at: '2026-10-09T10:18:00Z',
-  },
-  {
-    id: 'm-init-2',
-    conversation_id: 'conv-alex',
-    sender_id: 'current-user', // Will match current user
-    content: "I'm good! Working on the project. How about you?",
-    created_at: '2026-10-09T10:20:00Z',
-    updated_at: '2026-10-09T10:20:00Z',
-  },
-  {
-    id: 'm-init-3',
-    conversation_id: 'conv-alex',
-    sender_id: 'user-alex',
-    content: 'Same here. Just finished the design draft. Looks great! 👍',
-    created_at: '2026-10-09T10:22:00Z',
-    updated_at: '2026-10-09T10:22:00Z',
-  },
-  {
-    id: 'm-init-4',
-    conversation_id: 'conv-alex',
-    sender_id: 'current-user',
-    content: 'Awesome! Can you send it over?',
-    created_at: '2026-10-09T10:24:00Z',
-    updated_at: '2026-10-09T10:24:00Z',
-  },
-  {
-    id: 'm-init-5',
-    conversation_id: 'conv-alex',
-    sender_id: 'user-alex',
-    content: '',
-    attachment_name: 'design_draft.pdf',
-    attachment_type: 'application/pdf',
-    attachment_size: 2400000,
-    attachment_url: '#',
-    created_at: '2026-10-09T10:25:00Z',
-    updated_at: '2026-10-09T10:25:00Z',
-  },
-];
+import { supabase } from '../lib/supabase';
 
 export const ChatDashboard: React.FC = () => {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_DEMO_CONVERSATIONS);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>('conv-alex');
+  const { user, profile, signOut, isConfigured } = useAuth();
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Sync user id in initial messages
-  const effectiveUserId = user?.id || 'current-user';
+  // ─── Load conversations from Supabase ─────────────────────────────────────
+  const loadConversations = useCallback(async () => {
+    if (!user || !isConfigured) { setLoadingConversations(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select(`
+          *,
+          members:conversation_members(
+            id, conversation_id, user_id, role, joined_at, last_read_at,
+            profiles(id, display_name, username, avatar_url, bio, status)
+          )
+        `)
+        .order('updated_at', { ascending: false });
 
-  // Load conversations from backend if available, fallback to demo
+      if (error) throw error;
+
+      // For each conversation, get last message + unread count
+      const withExtras = await Promise.all(
+        (data || []).map(async (conv) => {
+          // Check if current user is a member
+          const isMember = conv.members?.some((m: any) => m.user_id === user.id);
+          if (!isMember) return null;
+
+          const [{ data: lastMsgData }, { count }] = await Promise.all([
+            supabase
+              .from('messages')
+              .select('id, content, sender_id, created_at, attachment_name')
+              .eq('conversation_id', conv.id)
+              .is('deleted_at', null)
+              .order('created_at', { ascending: false })
+              .limit(1),
+            supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', conv.id)
+              .is('deleted_at', null)
+              .neq('sender_id', user.id),
+          ]);
+
+          return {
+            ...conv,
+            last_message: lastMsgData?.[0] ?? null,
+            unread_count: count ?? 0,
+          };
+        })
+      );
+
+      const filtered = withExtras.filter(Boolean) as Conversation[];
+      setConversations(filtered);
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [user, isConfigured]);
+
   useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        const backendConvs = await api.getConversations();
-        if (backendConvs && backendConvs.length > 0) {
-          setConversations(backendConvs);
-          if (!selectedConversationId) {
-            setSelectedConversationId(backendConvs[0].id);
-          }
-        }
-      } catch {
-        // Use demo conversations
-      }
-    };
-
     loadConversations();
-  }, [user]);
+  }, [loadConversations]);
 
-  // Load messages for the selected conversation
+  // ─── Load messages for selected conversation ───────────────────────────────
+  const loadMessages = useCallback(async (conversationId: string) => {
+    if (!user || !isConfigured) return;
+    setLoadingMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:profiles!sender_id(id, display_name, username, avatar_url, status)
+        `)
+        .eq('conversation_id', conversationId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [user, isConfigured]);
+
+  // ─── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!selectedConversationId) {
-      setMessages([]);
-      return;
+    if (!selectedConversationId || !isConfigured) return;
+
+    // Cleanup old subscription
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
     }
 
-    const loadMessages = async () => {
-      if (selectedConversationId === 'conv-alex') {
-        const customized = INITIAL_ALEX_MESSAGES.map((m) =>
-          m.sender_id === 'current-user' ? { ...m, sender_id: effectiveUserId } : m
+    const channel = supabase
+      .channel(`messages:${selectedConversationId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${selectedConversationId}`,
+      }, async (payload) => {
+        // Fetch with sender profile
+        const { data } = await supabase
+          .from('messages')
+          .select(`*, sender:profiles!sender_id(id, display_name, username, avatar_url, status)`)
+          .eq('id', payload.new.id)
+          .single();
+
+        if (data) {
+          setMessages((prev) => {
+            if (prev.find((m) => m.id === data.id)) return prev;
+            return [...prev, data];
+          });
+        }
+        // Refresh conversation list to update last_message
+        loadConversations();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${selectedConversationId}`,
+      }, (payload) => {
+        setMessages((prev) =>
+          prev.map((m) => m.id === payload.new.id ? { ...m, ...payload.new } : m)
         );
-        setMessages(customized);
-        return;
-      }
+      })
+      .subscribe();
 
-      try {
-        const fetchedMessages = await api.getMessages(selectedConversationId);
-        setMessages(fetchedMessages);
-      } catch {
-        setMessages([]);
-      }
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [selectedConversationId, isConfigured, loadConversations]);
 
-    loadMessages();
+  // ─── Select conversation ───────────────────────────────────────────────────
+  const handleSelectConversation = (id: string) => {
+    setSelectedConversationId(id);
+    setMessages([]);
+    setShowMobileChat(true);
+    loadMessages(id);
+  };
 
-    // Setup Supabase Realtime subscription
-    if (isSupabaseConfigured) {
-      const channel = supabase
-        .channel(`chat:${selectedConversationId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `conversation_id=eq.${selectedConversationId}`,
-          },
-          (payload) => {
-            const newMsg = payload.new as Message;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [selectedConversationId, effectiveUserId]);
-
-  const activeConversation = conversations.find((c) => c.id === selectedConversationId) || null;
-
+  // ─── Send message ──────────────────────────────────────────────────────────
   const handleSendMessage = async (
     content: string,
     attachment?: { url: string; name: string; type: string; size: number }
   ) => {
-    if (!selectedConversationId) return;
+    if (!selectedConversationId || !user || !isConfigured) return;
 
-    const optimisticId = `msg-${Date.now()}`;
-    const newMsg: Message = {
-      id: optimisticId,
+    const msgData: Record<string, unknown> = {
       conversation_id: selectedConversationId,
-      sender_id: effectiveUserId,
+      sender_id: user.id,
       content,
-      attachment_url: attachment?.url,
-      attachment_name: attachment?.name,
-      attachment_type: attachment?.type,
-      attachment_size: attachment?.size,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    // Optimistic UI update
-    setMessages((prev) => [...prev, newMsg]);
+    if (attachment) {
+      msgData.attachment_url = attachment.url;
+      msgData.attachment_name = attachment.name;
+      msgData.attachment_type = attachment.type;
+      msgData.attachment_size = attachment.size;
+    }
 
-    // Update conversation's last message snippet
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedConversationId
-          ? {
-              ...c,
-              last_message: {
-                id: optimisticId,
-                content: content || `📎 ${attachment?.name || 'File'}`,
-                sender_id: effectiveUserId,
-                created_at: new Date().toISOString(),
-                attachment_name: attachment?.name,
-              },
-              updated_at: new Date().toISOString(),
-            }
-          : c
-      )
+    const { data, error } = await supabase
+      .from('messages')
+      .insert(msgData)
+      .select(`*, sender:profiles!sender_id(id, display_name, username, avatar_url, status)`)
+      .single();
+
+    if (!error && data) {
+      setMessages((prev) => {
+        if (prev.find((m) => m.id === data.id)) return prev;
+        return [...prev, data];
+      });
+      // Update conversation's updated_at so it bubbles to top
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', selectedConversationId);
+      loadConversations();
+    }
+  };
+
+  // ─── Delete message ────────────────────────────────────────────────────────
+  const handleDeleteMessage = async (id: string) => {
+    if (!isConfigured) return;
+    await supabase
+      .from('messages')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  // ─── Start new chat with found user ───────────────────────────────────────
+  const handleStartChatWithUser = async (recipient: UserProfile) => {
+    if (!user || !isConfigured) return;
+    setShowNewChatModal(false);
+
+    // Check if conversation already exists between these two users
+    const existing = conversations.find((conv) =>
+      !conv.is_group &&
+      conv.members?.length === 2 &&
+      conv.members.some((m) => m.user_id === recipient.id) &&
+      conv.members.some((m) => m.user_id === user.id)
     );
 
-    // Call Render backend API if real conversation
-    if (selectedConversationId !== 'conv-alex') {
-      try {
-        await api.sendMessage(selectedConversationId, {
-          content,
-          attachment_url: attachment?.url,
-          attachment_name: attachment?.name,
-          attachment_type: attachment?.type,
-          attachment_size: attachment?.size,
-        });
-      } catch (err) {
-        console.error('Failed to post message to backend:', err);
-      }
+    if (existing) {
+      handleSelectConversation(existing.id);
+      return;
     }
+
+    // Create new direct conversation
+    const { data: newConv, error: convErr } = await supabase
+      .from('conversations')
+      .insert({ is_group: false, created_by: user.id })
+      .select()
+      .single();
+
+    if (convErr || !newConv) {
+      console.error('Failed to create conversation:', convErr);
+      return;
+    }
+
+    // Add both members
+    await supabase.from('conversation_members').insert([
+      { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
+      { conversation_id: newConv.id, user_id: recipient.id, role: 'member' },
+    ]);
+
+    await loadConversations();
+    handleSelectConversation(newConv.id);
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
-    setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    try {
-      await api.deleteMessage(messageId);
-    } catch {
-      // Ignore
-    }
+  // ─── Sign out ──────────────────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
   };
 
-  const handleStartChatWithUser = async (targetUser: UserProfile) => {
-    try {
-      const conv = await api.createConversation({ recipient_id: targetUser.id });
-      setConversations((prev) => [
-        {
-          id: conv.id,
-          is_group: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          members: [
-            {
-              id: `mem-${targetUser.id}`,
-              conversation_id: conv.id,
-              user_id: targetUser.id,
-              role: 'member',
-              joined_at: new Date().toISOString(),
-              last_read_at: new Date().toISOString(),
-              profiles: targetUser,
-            },
-          ],
-        },
-        ...prev,
-      ]);
-      setSelectedConversationId(conv.id);
-    } catch {
-      // Offline / demo fallback
-      const fakeId = `conv-${targetUser.id}`;
-      const newConv: Conversation = {
-        id: fakeId,
-        is_group: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        members: [
-          {
-            id: `mem-${targetUser.id}`,
-            conversation_id: fakeId,
-            user_id: targetUser.id,
-            role: 'member',
-            joined_at: new Date().toISOString(),
-            last_read_at: new Date().toISOString(),
-            profiles: targetUser,
-          },
-        ],
-      };
-      setConversations((prev) => [newConv, ...prev]);
-      setSelectedConversationId(fakeId);
-    }
-  };
+  const selectedConversation = conversations.find((c) => c.id === selectedConversationId) ?? null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 font-sans">
-      {/* 1. Desktop Left Navigation Bar */}
-      <Navbar
-        unreadTotal={5}
-        onOpenNewChat={() => setIsNewChatOpen(true)}
-      />
-
-      {/* 2. Middle Column: Conversations List */}
-      <div
-        className={`h-full ${
-          selectedConversationId ? 'hidden md:flex' : 'flex'
-        } flex-col w-full md:w-80 lg:w-96 flex-shrink-0`}
+    <div className="h-screen flex bg-[#090e17] overflow-hidden">
+      {/* Sidebar */}
+      <motion.aside
+        initial={{ x: -10, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className={`flex flex-col w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-slate-800/60 ${showMobileChat ? 'hidden md:flex' : 'flex'}`}
       >
-        <ChatList
-          conversations={conversations}
-          selectedConversationId={selectedConversationId}
-          onSelectConversation={(id) => setSelectedConversationId(id)}
-          onOpenNewChat={() => setIsNewChatOpen(true)}
-        />
-      </div>
+        {/* App header in sidebar */}
+        <div className="h-16 px-4 bg-slate-950/80 border-b border-slate-800/60 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-400 flex items-center justify-center shadow-lg">
+              <Waves className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-bold text-white text-sm tracking-tight">Bluewave</span>
+          </div>
 
-      {/* 3. Right Column: Active Chat Feed Area */}
-      <div
-        className={`flex-1 h-full ${
-          !selectedConversationId ? 'hidden md:flex' : 'flex'
-        } flex-col`}
-      >
+          {/* Profile menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded-xl transition"
+            >
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex-shrink-0">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="You" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white font-bold text-sm">
+                    {profile?.display_name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {showProfileMenu && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowProfileMenu(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    className="absolute right-0 top-12 z-30 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2"
+                  >
+                    <div className="px-3 py-2 mb-1 border-b border-slate-800">
+                      <p className="text-sm font-bold text-white truncate">{profile?.display_name || 'You'}</p>
+                      <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                    </div>
+                    <button onClick={() => { navigate('/app/profile'); setShowProfileMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition">
+                      <UserIcon className="w-4 h-4" /> Profile
+                    </button>
+                    <button onClick={() => { navigate('/app/settings'); setShowProfileMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition">
+                      <Settings className="w-4 h-4" /> Settings
+                    </button>
+                    <div className="border-t border-slate-800 mt-1 pt-1">
+                      <button onClick={handleSignOut}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition">
+                        <LogOut className="w-4 h-4" /> Sign out
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Chat list */}
+        <div className="flex-1 overflow-hidden">
+          <ChatList
+            conversations={conversations}
+            selectedConversationId={selectedConversationId}
+            onSelectConversation={handleSelectConversation}
+            onOpenNewChat={() => setShowNewChatModal(true)}
+            loading={loadingConversations}
+          />
+        </div>
+      </motion.aside>
+
+      {/* Chat area */}
+      <main className={`flex-1 flex flex-col overflow-hidden ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
         <ChatArea
-          conversation={activeConversation}
+          conversation={selectedConversation}
           messages={messages}
           onSendMessage={handleSendMessage}
           onDeleteMessage={handleDeleteMessage}
-          onBackMobile={() => setSelectedConversationId(null)}
-          onViewProfile={(userId) => navigate(`/profile/${userId}`)}
+          onBackMobile={() => setShowMobileChat(false)}
+          loading={loadingMessages}
         />
-      </div>
+      </main>
 
-      {/* 4. Mobile Bottom Navigation Bar */}
-      {!selectedConversationId && <MobileNav />}
-
-      {/* 5. New Chat Modal */}
+      {/* New Chat Modal */}
       <NewChatModal
-        isOpen={isNewChatOpen}
-        onClose={() => setIsNewChatOpen(false)}
+        isOpen={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
         onSelectUser={handleStartChatWithUser}
       />
     </div>

@@ -13,38 +13,38 @@ import { ContactsPage } from './pages/ContactsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 
-// Protected route guard
+// Protected route guard — only real Supabase auth
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, isDemoMode } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#090e17] flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (!user && !isDemoMode) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
 };
 
-// Public route guard (redirects to /app if already logged in)
+// Public route guard — redirect to /app if already signed in
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading, isDemoMode } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#090e17] flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (user || isDemoMode) {
+  if (user) {
     return <Navigate to="/app" replace />;
   }
 
@@ -57,73 +57,29 @@ export const App: React.FC = () => {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* 1. Splash / Welcome Page */}
+            {/* Landing */}
             <Route path="/" element={<SplashPage />} />
 
-            {/* 2. Authentication Pages */}
-            <Route
-              path="/login"
-              element={
-                <PublicRoute>
-                  <LoginPage />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/signup"
-              element={
-                <PublicRoute>
-                  <SignUpPage />
-                </PublicRoute>
-              }
-            />
+            {/* Auth */}
+            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/signup" element={<PublicRoute><SignUpPage /></PublicRoute>} />
             <Route path="/verify" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* 3. Main Chat & App Pages (Protected) */}
-            <Route
-              path="/app"
-              element={
-                <ProtectedRoute>
-                  <ChatDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/contacts"
-              element={
-                <ProtectedRoute>
-                  <ContactsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile/:id"
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* Protected app routes */}
+            <Route path="/app" element={<ProtectedRoute><ChatDashboard /></ProtectedRoute>} />
+            <Route path="/app/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/app/profile/:id" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/app/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/app/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
 
-            {/* Catch-all fallback */}
+            {/* Legacy paths */}
+            <Route path="/contacts" element={<ProtectedRoute><ContactsPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
+            {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

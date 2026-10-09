@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield, MessageSquare, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Mail, Lock, Eye, EyeOff, Loader2, Waves } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { BrandLogo } from '../components/BrandLogo';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signIn, enableDemoMode } = useAuth();
+  const { signIn, isConfigured } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,14 +17,10 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
       const res = await signIn(email, password);
-      if (res.success) {
-        navigate('/app');
-      } else {
-        setError(res.error || 'Failed to sign in. Please verify your credentials.');
-      }
+      if (res.success) navigate('/app');
+      else setError(res.error || 'Failed to sign in.');
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
     } finally {
@@ -33,169 +28,108 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = () => {
-    enableDemoMode();
-    navigate('/app');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      {/* Container matching screenshot #1 */}
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 rounded-3xl overflow-hidden border border-slate-800/80 bg-slate-900/60 shadow-2xl backdrop-blur-xl">
-        {/* Left Side: Brand & Feature Highlights */}
-        <div className="relative p-8 sm:p-12 flex flex-col justify-between bg-gradient-to-br from-slate-900 via-blue-950/70 to-slate-950 overflow-hidden border-b md:border-b-0 md:border-r border-slate-800/60">
-          {/* Subtle wave gradient background glow */}
-          <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#090e17] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated background orbs */}
+      <div className="absolute inset-0 pointer-events-none">
+        <motion.div
+          animate={{ x: [0, 40, 0], y: [0, -30, 0] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ x: [0, -30, 0], y: [0, 40, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-cyan-500/8 rounded-full blur-3xl"
+        />
+      </div>
 
-          <div className="relative z-10 space-y-6">
-            <BrandLogo size="lg" showTagline />
-
-            <p className="text-slate-400 text-sm leading-relaxed pt-4">
-              Step into the future of messaging. Built for privacy, speed, and beautiful conversations.
-            </p>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md relative z-10"
+      >
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 via-blue-600 to-cyan-400 shadow-lg shadow-blue-500/30 mb-4">
+            <Waves className="w-7 h-7 text-white" />
           </div>
-
-          {/* Feature Bullets */}
-          <div className="relative z-10 space-y-5 my-8">
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-cyan-400 border border-blue-500/20">
-                <Shield className="w-4 h-4" />
-              </div>
-              <span className="text-sm font-medium text-slate-200">Secure messaging</span>
-            </div>
-
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-cyan-400 border border-blue-500/20">
-                <MessageSquare className="w-4 h-4" />
-              </div>
-              <span className="text-sm font-medium text-slate-200">Real-time chat</span>
-            </div>
-
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-cyan-400 border border-blue-500/20">
-                <Lock className="w-4 h-4" />
-              </div>
-              <span className="text-sm font-medium text-slate-200">Your data, your control</span>
-            </div>
-          </div>
-
-          <div className="relative z-10 text-xs text-slate-500">
-            Render Node.js Backend • Supabase Auth & PostgreSQL
-          </div>
+          <h1 className="text-2xl font-bold text-white">Bluewave Chat</h1>
+          <p className="text-slate-400 text-sm mt-1">Connect. Chat. Be Closer.</p>
         </div>
 
-        {/* Right Side: Sign In Form */}
-        <div className="p-8 sm:p-12 flex flex-col justify-center bg-slate-900/90">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-white tracking-tight">Welcome Back</h2>
-            <p className="text-xs text-slate-400 mt-1">Sign in to your account</p>
-          </div>
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
+          <h2 className="text-xl font-bold text-white mb-1">Welcome back</h2>
+          <p className="text-slate-400 text-sm mb-6">Sign in to your account</p>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs leading-relaxed">
-              {error}
+          {!isConfigured && (
+            <div className="mb-5 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs leading-relaxed">
+              ⚠️ Supabase is not configured. Add <code className="bg-amber-900/30 px-1 rounded">VITE_SUPABASE_URL</code> and <code className="bg-amber-900/30 px-1 rounded">VITE_SUPABASE_PUBLISHABLE_KEY</code> in Render environment variables, then redeploy the frontend.
             </div>
           )}
 
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs"
+            >
+              {error}
+            </motion.div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">Email address</label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="email"
-                  required
+                  type="email" required
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition"
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-slate-300">Password</label>
+                <Link to="/forgot-password" className="text-xs text-cyan-400 hover:text-cyan-300 transition">Forgot password?</Link>
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Enter your password"
+                  type={showPassword ? 'text' : 'password'} required
+                  placeholder="Your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Remember & Forgot */}
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-0"
-                />
-                <span>Remember me</span>
-              </label>
-
-              <Link
-                to="/forgot-password"
-                className="text-cyan-400 hover:text-cyan-300 font-medium transition"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 disabled:opacity-50"
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              type="submit" disabled={loading}
+              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              <span>Sign In</span>
-            </button>
+              Sign In
+            </motion.button>
           </form>
 
-          {/* Switch to Sign Up */}
           <p className="text-center text-xs text-slate-400 mt-5">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-cyan-400 hover:underline font-semibold">
-              Sign Up
-            </Link>
+            <Link to="/signup" className="text-cyan-400 hover:underline font-semibold">Create one</Link>
           </p>
-
-          {/* Divider */}
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-800" />
-            </div>
-            <div className="relative flex justify-center text-[11px] uppercase">
-              <span className="bg-slate-900 px-2 text-slate-500">or continue with</span>
-            </div>
-          </div>
-
-          {/* Quick Demo Sign In Button */}
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700/80 border border-slate-700/60 rounded-xl text-xs font-semibold text-slate-200 transition flex items-center justify-center gap-2"
-          >
-            <span>Preview as Alex Johnson (Instant Demo)</span>
-          </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

@@ -1,259 +1,198 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  MessageSquare, 
-  MoreHorizontal, 
-  Mail, 
-  Calendar, 
-  MapPin, 
-  Globe, 
-  Edit3,
-  Image as ImageIcon,
-  FileText
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Camera, Edit3, Check, X, Loader2, LogOut, Waves, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserProfile } from '../lib/types';
-import { api } from '../lib/api';
-import { EditProfileModal } from '../components/EditProfileModal';
+import { supabase } from '../lib/supabase';
 
 export const ProfilePage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { user, profile, updateUserProfile, signOut } = useAuth();
   const navigate = useNavigate();
-  const { profile: myProfile, user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'About' | 'Media' | 'Files'>('About');
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const isMe = !id || id === user?.id || id === myProfile?.id;
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
-    if (isMe) {
-      setProfile(myProfile);
-      return;
+    if (profile) {
+      setDisplayName(profile.display_name || '');
+      setBio(profile.bio || '');
     }
+  }, [profile]);
 
-    if (id) {
-      api.getUserProfile(id)
-        .then((data) => setProfile(data))
-        .catch(() => {
-          // Fallback user if demo
-          setProfile({
-            id,
-            display_name: 'Alex Johnson',
-            username: 'alexsj',
-            avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-            bio: "Just a guy who loves tech, travel and good conversations. Let's connect! 🚀",
-            status: 'online',
-          });
-        });
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateUserProfile({ display_name: displayName, bio });
+      setEditing(false);
+    } finally {
+      setSaving(false);
     }
-  }, [id, isMe, myProfile, user]);
+  };
 
-  const displayName = profile?.display_name || (isMe ? 'Alex Johnson' : 'User');
-  const username = profile?.username || 'alexsj';
-  const bio = profile?.bio || "Just a guy who loves tech, travel and good conversations. Let's connect! 🚀";
-  const avatarUrl = profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
-  const isOnline = profile?.status === 'online';
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `avatars/${user.id}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      await updateUserProfile({ avatar_url: data.publicUrl });
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center">
-      {/* Container matching screenshot #8 */}
-      <div className="w-full max-w-4xl bg-slate-900 border-x border-b border-slate-800 min-h-screen flex flex-col">
-        {/* Top Navbar */}
-        <div className="h-14 px-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 backdrop-blur sticky top-0 z-20">
-          <button
-            onClick={() => navigate('/app')}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition text-sm font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Chats</span>
-          </button>
-
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {isMe ? 'My Profile' : 'User Profile'}
-          </span>
-
-          {isMe ? (
-            <button
-              onClick={() => setIsEditModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-semibold rounded-lg transition"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </button>
-          ) : (
-            <div className="w-16" />
-          )}
-        </div>
-
-        {/* Cover Photo Banner (Scenic Landscape matching screenshot #8) */}
-        <div className="relative h-56 sm:h-72 w-full overflow-hidden bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900">
-          <img
-            src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80"
-            alt="Profile Cover"
-            className="w-full h-full object-cover opacity-85 brightness-90"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
-        </div>
-
-        {/* Profile Card Header */}
-        <div className="relative px-6 sm:px-10 pb-6 flex flex-col items-center text-center -mt-16 z-10">
-          {/* Overlapping circular avatar */}
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden ring-4 ring-slate-900 shadow-2xl bg-slate-800">
-            <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-            <span
-              className={`absolute bottom-2 right-2 w-4 h-4 rounded-full ring-4 ring-slate-900 ${
-                isOnline ? 'bg-emerald-500' : 'bg-slate-500'
-              }`}
-            />
+    <div className="min-h-screen bg-[#090e17] text-white">
+      {/* Header */}
+      <div className="h-16 px-4 bg-slate-950/80 border-b border-slate-800/60 flex items-center gap-3 sticky top-0 z-10 backdrop-blur-md">
+        <button onClick={() => navigate('/app')} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-400 flex items-center justify-center">
+            <Waves className="w-3.5 h-3.5 text-white" />
           </div>
-
-          {/* Name & Handle */}
-          <h1 className="mt-4 text-2xl font-bold text-white tracking-tight">{displayName}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Online
-            </span>
-            <span className="text-slate-500">•</span>
-            <span className="text-xs text-slate-400 font-medium">@{username}</span>
-          </div>
-
-          {/* Bio */}
-          <p className="mt-3 text-sm text-slate-300 max-w-lg leading-relaxed">{bio}</p>
-
-          {/* Stats Bar (matching screenshot #8: 12 Posts, 248 Followers, 362 Following) */}
-          <div className="mt-6 flex items-center justify-center divide-x divide-slate-800 bg-slate-800/40 border border-slate-800 rounded-2xl py-3 px-6 max-w-sm w-full">
-            <div className="px-5 text-center">
-              <p className="text-lg font-bold text-white">12</p>
-              <p className="text-[11px] text-slate-400 font-medium">Posts</p>
-            </div>
-            <div className="px-5 text-center">
-              <p className="text-lg font-bold text-white">248</p>
-              <p className="text-[11px] text-slate-400 font-medium">Followers</p>
-            </div>
-            <div className="px-5 text-center">
-              <p className="text-lg font-bold text-white">362</p>
-              <p className="text-[11px] text-slate-400 font-medium">Following</p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="mt-6 flex items-center gap-3">
-            <button
-              onClick={() => navigate('/app')}
-              className="flex items-center gap-2 px-8 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition active:scale-95"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Message</span>
-            </button>
-
-            <button
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-              title="More Options"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs: About, Media, Files */}
-        <div className="border-b border-slate-800 flex justify-center gap-8 px-6 text-sm font-semibold select-none">
-          {(['About', 'Media', 'Files'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`py-3.5 relative transition ${
-                activeTab === tab
-                  ? 'text-cyan-400'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>{tab}</span>
-              {activeTab === tab && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6 sm:p-10 flex-1">
-          {activeTab === 'About' && (
-            <div className="space-y-6 max-w-lg mx-auto text-sm text-slate-300">
-              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/40 border border-slate-800">
-                <Mail className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Email Address</p>
-                  <p className="text-slate-200 font-medium">alex@example.com</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/40 border border-slate-800">
-                <MapPin className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Location</p>
-                  <p className="text-slate-200 font-medium">San Francisco, CA</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/40 border border-slate-800">
-                <Calendar className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Member Since</p>
-                  <p className="text-slate-200 font-medium">January 2026</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'Media' && (
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300&auto=format&fit=crop&q=80',
-                'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=300&auto=format&fit=crop&q=80',
-                'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=300&auto=format&fit=crop&q=80',
-              ].map((src, i) => (
-                <div key={i} className="aspect-square rounded-xl overflow-hidden bg-slate-800 group">
-                  <img src={src} alt="Shared media" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'Files' && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 border border-slate-800">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-cyan-400" />
-                  <div>
-                    <p className="text-xs font-semibold text-white">design_draft.pdf</p>
-                    <p className="text-[10px] text-slate-400">2.4 MB • Today at 10:25</p>
-                  </div>
-                </div>
-                <button className="text-xs text-cyan-400 hover:underline">Download</button>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 border border-slate-800">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-cyan-400" />
-                  <div>
-                    <p className="text-xs font-semibold text-white">project_specs_v2.docx</p>
-                    <p className="text-[10px] text-slate-400">1.1 MB • Yesterday</p>
-                  </div>
-                </div>
-                <button className="text-xs text-cyan-400 hover:underline">Download</button>
-              </div>
-            </div>
-          )}
+          <span className="font-bold text-sm">Profile</span>
         </div>
       </div>
 
-      <EditProfileModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-      />
+      <div className="max-w-lg mx-auto px-4 py-8">
+        {/* Avatar section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center mb-8"
+        >
+          <div className="relative mb-4">
+            <div className="w-28 h-28 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-800">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white font-bold text-4xl">
+                  {profile?.display_name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              )}
+            </div>
+            <label className={`absolute bottom-1 right-1 p-2 bg-blue-600 hover:bg-blue-500 rounded-full cursor-pointer transition shadow-lg ${uploadingAvatar ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5 text-white" />}
+              <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
+            </label>
+          </div>
+
+          {/* Status badge */}
+          <span className="px-3 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
+            {profile?.status || 'online'}
+          </span>
+        </motion.div>
+
+        {/* Profile info card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-5"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-bold text-white">Your information</h2>
+            {!editing ? (
+              <button onClick={() => setEditing(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:text-white hover:bg-slate-800 rounded-xl transition">
+                <Edit3 className="w-3.5 h-3.5" /> Edit
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setEditing(false); setDisplayName(profile?.display_name || ''); setBio(profile?.bio || ''); }}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition">
+                  <X className="w-4 h-4" />
+                </button>
+                <button onClick={handleSave} disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 rounded-xl transition">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Display name */}
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Display name</label>
+            {editing ? (
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
+              />
+            ) : (
+              <p className="text-sm text-white font-medium">{profile?.display_name || '—'}</p>
+            )}
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Username</label>
+            <p className="text-sm text-slate-300">@{profile?.username || '—'}</p>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Email</label>
+            <p className="text-sm text-slate-300">{user?.email || '—'}</p>
+          </div>
+
+          {/* Bio */}
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Bio</label>
+            {editing ? (
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Tell others about yourself..."
+                className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition resize-none"
+              />
+            ) : (
+              <p className="text-sm text-slate-300">{profile?.bio || <span className="italic text-slate-500">No bio yet. Click Edit to add one.</span>}</p>
+            )}
+          </div>
+
+          {/* Joined date */}
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Member since</label>
+            <p className="text-sm text-slate-300">
+              {profile?.created_at
+                ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                : '—'}
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Sign out */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mt-6"
+        >
+          <button
+            onClick={async () => { await signOut(); navigate('/'); }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 font-semibold text-sm rounded-xl transition"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </motion.div>
+      </div>
     </div>
   );
 };
