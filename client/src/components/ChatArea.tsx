@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Smile, Phone, Video, MoreVertical,
-  ArrowLeft, Trash2, CheckCheck, FileText, Download, X, Loader2
+  ArrowLeft, Trash2, CheckCheck, FileText, Download, X, Loader2, User as UserIcon
 } from 'lucide-react';
-import { Message, Conversation } from '../lib/types';
+import { Message, Conversation, UserProfile } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { format, isToday } from 'date-fns';
@@ -18,6 +18,7 @@ interface ChatAreaProps {
   onSendMessage: (content: string, attachment?: { url: string; name: string; type: string; size: number }) => Promise<void>;
   onDeleteMessage?: (id: string) => Promise<void>;
   onDeleteConversation?: (id: string) => Promise<void>;
+  onViewProfile?: (user: UserProfile) => void;
   onBackMobile?: () => void;
   loading?: boolean;
 }
@@ -33,7 +34,7 @@ const Avatar: React.FC<{ name: string; url?: string | null; size?: number }> = (
 );
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
-  conversation, messages, onSendMessage, onDeleteMessage, onDeleteConversation, onBackMobile, loading = false,
+  conversation, messages, onSendMessage, onDeleteMessage, onDeleteConversation, onViewProfile, onBackMobile, loading = false,
 }) => {
   const { user, profile } = useAuth();
   const [inputText, setInputText] = useState('');
@@ -125,9 +126,23 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     <div className="flex-1 flex flex-col h-full bg-[#090e17] overflow-hidden">
       {/* Header */}
       <div className="h-16 px-4 bg-slate-900/80 border-b border-slate-800/60 flex items-center justify-between backdrop-blur-md flex-shrink-0">
-        <div className="flex items-center gap-3">
+        <div
+          onClick={() => {
+            if (!conversation.is_group && otherMember && onViewProfile) {
+              onViewProfile(otherMember);
+            }
+          }}
+          className={`flex items-center gap-3 ${!conversation.is_group ? 'cursor-pointer hover:opacity-85 transition group/header' : ''}`}
+          title={!conversation.is_group ? `View ${chatTitle}'s profile` : undefined}
+        >
           {onBackMobile && (
-            <button onClick={onBackMobile} className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg transition">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onBackMobile();
+              }}
+              className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+            >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
@@ -138,7 +153,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             )}
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white">{chatTitle}</h2>
+            <h2 className="text-sm font-bold text-white group-hover/header:text-cyan-400 transition">{chatTitle}</h2>
             <p className="text-xs text-slate-400">
               {conversation.is_group
                 ? `${conversation.members?.length || 0} members`
@@ -163,6 +178,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   exit={{ opacity: 0, scale: 0.95, y: -4 }}
                   className="absolute right-0 top-11 z-30 w-48 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5"
                 >
+                  {!conversation.is_group && otherMember && onViewProfile && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        onViewProfile(otherMember);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 rounded-xl transition"
+                    >
+                      <UserIcon className="w-4 h-4 text-cyan-400" /> View Profile
+                    </button>
+                  )}
                   {onDeleteConversation && (
                     <button
                       onClick={() => {
@@ -231,7 +257,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     >
                       {/* Other user avatar */}
                       {!isMe && (
-                        <div className="w-8 flex-shrink-0 mr-2 mt-auto">
+                        <div
+                          onClick={() => msg.sender && onViewProfile && onViewProfile(msg.sender)}
+                          className={`w-8 flex-shrink-0 mr-2 mt-auto ${msg.sender ? 'cursor-pointer hover:opacity-80 transition' : ''}`}
+                          title={msg.sender ? `View ${msg.sender.display_name}'s profile` : undefined}
+                        >
                           {showAvatar && <Avatar name={msg.sender?.display_name || 'U'} url={msg.sender?.avatar_url} size={8} />}
                         </div>
                       )}
@@ -239,7 +269,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                       <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                         {/* Sender name in group */}
                         {conversation.is_group && !isMe && showAvatar && (
-                          <span className="text-[11px] font-semibold text-cyan-400 mb-1 ml-1">
+                          <span
+                            onClick={() => msg.sender && onViewProfile && onViewProfile(msg.sender)}
+                            className="text-[11px] font-semibold text-cyan-400 mb-1 ml-1 cursor-pointer hover:underline"
+                            title={msg.sender ? `View ${msg.sender.display_name}'s profile` : undefined}
+                          >
                             {msg.sender?.display_name}
                           </span>
                         )}

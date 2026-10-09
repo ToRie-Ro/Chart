@@ -6,6 +6,7 @@ import { Conversation, Message, UserProfile } from '../lib/types';
 import { ChatList } from '../components/ChatList';
 import { ChatArea } from '../components/ChatArea';
 import { NewChatModal } from '../components/NewChatModal';
+import { UserProfileModal } from '../components/UserProfileModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -21,6 +22,7 @@ export const ChatDashboard: React.FC = () => {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [viewingProfileUser, setViewingProfileUser] = useState<UserProfile | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'success' } | null>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -672,6 +674,7 @@ export const ChatDashboard: React.FC = () => {
           onSendMessage={handleSendMessage}
           onDeleteMessage={handleDeleteMessage}
           onDeleteConversation={handleDeleteConversation}
+          onViewProfile={setViewingProfileUser}
           onBackMobile={() => setShowMobileChat(false)}
           loading={loadingMessages}
         />
@@ -683,6 +686,14 @@ export const ChatDashboard: React.FC = () => {
         onClose={() => setShowNewChatModal(false)}
         onSelectUser={handleStartChatWithUser}
         onCreateGroup={handleCreateGroup}
+      />
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        user={viewingProfileUser}
+        isOpen={!!viewingProfileUser}
+        onClose={() => setViewingProfileUser(null)}
+        onStartChat={handleStartChatWithUser}
       />
     </div>
   );
