@@ -29,29 +29,74 @@ export const ChatDashboard: React.FC = () => {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // ─── Load conversations from Supabase ─────────────────────────────────────
+  // ─── Load conversations from Supabase (safe multi-step fetch) ─────────────
   const loadConversations = useCallback(async () => {
     if (!user || !isConfigured) { setLoadingConversations(false); return; }
     try {
-      const { data, error } = await supabase
+      // 1. Get all conversation memberships for the current user
+      const { data: myMemberRows, error: myMemberErr } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id);
+
+      if (myMemberErr) throw myMemberErr;
+      if (!myMemberRows || myMemberRows.length === 0) {
+        setConversations([]);
+        setLoadingConversations(false);
+        return;
+      }
+
+      const myConvIds = myMemberRows.map((m) => m.conversation_id);
+
+      // 2. Fetch conversation records
+      const { data: convRows, error: convErr } = await supabase
         .from('conversations')
-        .select(`
-          *,
-          members:conversation_members(
-            id, conversation_id, user_id, role, joined_at, last_read_at,
-            profiles(id, display_name, username, avatar_url, bio, status)
-          )
-        `)
+        .select('*')
+        .in('id', myConvIds)
         .order('updated_at', { ascending: false });
 
-      if (error) throw error;
+      if (convErr) throw convErr;
+      if (!convRows || convRows.length === 0) {
+        setConversations([]);
+        setLoadingConversations(false);
+        return;
+      }
 
-      // For each conversation, get last message + unread count
-      const withExtras = await Promise.all(
-        (data || []).map(async (conv) => {
-          // Check if current user is a member
-          const isMember = conv.members?.some((m: any) => m.user_id === user.id);
-          if (!isMember) return null;
+      // 3. Fetch all members across these conversations
+      const { data: allMembers, error: allMemErr } = await supabase
+        .from('conversation_members')
+        .select('*')
+        .in('conversation_id', myConvIds);
+
+      if (allMemErr) throw allMemErr;
+
+      // 4. Fetch profiles for all member user_ids
+      const allUserIds = Array.from(new Set((allMembers || []).map((m) => m.user_id)));
+      let profileMap = new Map<string, UserProfile>();
+      if (allUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, display_name, username, avatar_url, bio, status, last_seen')
+          .in('id', allUserIds);
+
+        if (profilesData) {
+          profileMap = new Map(profilesData.map((p) => [p.id, p]));
+        }
+      }
+
+      // 5. Build enriched conversations with last message and unread count
+      const enriched = await Promise.all(
+        convRows.map(async (conv) => {
+          const members = (allMembers || [])
+            .filter((m) => m.conversation_id === conv.id)
+            .map((m) => ({
+              ...m,
+              profiles: profileMap.get(m.user_id) || {
+                id: m.user_id,
+                display_name: 'User',
+                username: 'user',
+              },
+            }));
 
           const [{ data: lastMsgData }, { count }] = await Promise.all([
             supabase
@@ -71,15 +116,15 @@ export const ChatDashboard: React.FC = () => {
 
           return {
             ...conv,
+            members,
             last_message: lastMsgData?.[0] ?? null,
             unread_count: count ?? 0,
-          };
+          } as Conversation;
         })
       );
 
-      const filtered = withExtras.filter(Boolean) as Conversation[];
-      setConversations(filtered);
-    } catch (err) {
+      setConversations(enriched);
+    } catch (err: any) {
       console.error('Failed to load conversations:', err);
     } finally {
       setLoadingConversations(false);
@@ -95,19 +140,38 @@ export const ChatDashboard: React.FC = () => {
     if (!user || !isConfigured) return;
     setLoadingMessages(true);
     try {
-      const { data, error } = await supabase
+      const { data: rawMessages, error: msgErr } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:profiles!sender_id(id, display_name, username, avatar_url, status)
-        `)
+        .select('*')
         .eq('conversation_id', conversationId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (err) {
+      if (msgErr) throw msgErr;
+
+      const senderIds = Array.from(new Set((rawMessages || []).map((m) => m.sender_id)));
+      let senderMap = new Map<string, UserProfile>();
+      if (senderIds.length > 0) {
+        const { data: senders } = await supabase
+          .from('profiles')
+          .select('id, display_name, username, avatar_url, status')
+          .in('id', senderIds);
+        if (senders) {
+          senderMap = new Map(senders.map((s) => [s.id, s]));
+        }
+      }
+
+      const enriched = (rawMessages || []).map((m) => ({
+        ...m,
+        sender: senderMap.get(m.sender_id) || {
+          id: m.sender_id,
+          display_name: 'User',
+          username: 'user',
+        },
+      }));
+
+      setMessages(enriched as Message[]);
+    } catch (err: any) {
       console.error('Failed to load messages:', err);
     } finally {
       setLoadingMessages(false);
@@ -118,7 +182,6 @@ export const ChatDashboard: React.FC = () => {
   useEffect(() => {
     if (!selectedConversationId || !isConfigured) return;
 
-    // Cleanup old subscription
     if (realtimeChannelRef.current) {
       supabase.removeChannel(realtimeChannelRef.current);
     }
@@ -131,20 +194,29 @@ export const ChatDashboard: React.FC = () => {
         table: 'messages',
         filter: `conversation_id=eq.${selectedConversationId}`,
       }, async (payload) => {
-        // Fetch with sender profile
-        const { data } = await supabase
+        const { data: rawMsg } = await supabase
           .from('messages')
-          .select(`*, sender:profiles!sender_id(id, display_name, username, avatar_url, status)`)
+          .select('*')
           .eq('id', payload.new.id)
           .single();
 
-        if (data) {
+        if (rawMsg) {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('id, display_name, username, avatar_url, status')
+            .eq('id', rawMsg.sender_id)
+            .maybeSingle();
+
+          const enriched = {
+            ...rawMsg,
+            sender: senderProfile || undefined,
+          };
+
           setMessages((prev) => {
-            if (prev.find((m) => m.id === data.id)) return prev;
-            return [...prev, data];
+            if (prev.find((m) => m.id === enriched.id)) return prev;
+            return [...prev, enriched];
           });
         }
-        // Refresh conversation list to update last_message
         loadConversations();
       })
       .on('postgres_changes', {
@@ -184,7 +256,7 @@ export const ChatDashboard: React.FC = () => {
     const msgData: Record<string, unknown> = {
       conversation_id: selectedConversationId,
       sender_id: user.id,
-      content: content || ' ', // content column is NOT NULL — use space for attachment-only messages
+      content: content || ' ',
     };
 
     if (attachment) {
@@ -197,20 +269,30 @@ export const ChatDashboard: React.FC = () => {
     const { data, error } = await supabase
       .from('messages')
       .insert(msgData)
-      .select(`*, sender:profiles!sender_id(id, display_name, username, avatar_url, status)`)
+      .select('*')
       .single();
 
     if (!error && data) {
+      const fullMsg: Message = {
+        ...data,
+        sender: profile || {
+          id: user.id,
+          display_name: user.email?.split('@')[0] || 'You',
+          username: user.email?.split('@')[0] || 'you',
+        },
+      };
       setMessages((prev) => {
-        if (prev.find((m) => m.id === data.id)) return prev;
-        return [...prev, data];
+        if (prev.find((m) => m.id === fullMsg.id)) return prev;
+        return [...prev, fullMsg];
       });
-      // Update conversation's updated_at so it bubbles to top
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', selectedConversationId);
       loadConversations();
+    } else if (error) {
+      console.error('Send message error:', error);
+      showToast(error.message || 'Failed to send message.');
     }
   };
 
@@ -229,34 +311,93 @@ export const ChatDashboard: React.FC = () => {
     if (!user || !isConfigured) return;
     setShowNewChatModal(false);
 
-    const existing = conversations.find((conv) =>
-      !conv.is_group &&
-      conv.members?.length === 2 &&
-      conv.members.some((m) => m.user_id === recipient.id) &&
-      conv.members.some((m) => m.user_id === user.id)
-    );
+    try {
+      // 1. Check if conversation already exists in memory or in DB
+      let existingConvId: string | null = null;
 
-    if (existing) { handleSelectConversation(existing.id); return; }
+      const memExisting = conversations.find((conv) =>
+        !conv.is_group &&
+        conv.members?.length === 2 &&
+        conv.members.some((m) => m.user_id === recipient.id) &&
+        conv.members.some((m) => m.user_id === user.id)
+      );
 
-    const { data: newConv, error: convErr } = await supabase
-      .from('conversations')
-      .insert({ is_group: false })
-      .select()
-      .single();
+      if (memExisting) {
+        handleSelectConversation(memExisting.id);
+        return;
+      }
 
-    if (convErr || !newConv) {
-      console.error('Failed to create conversation:', convErr);
-      showToast('Failed to start chat. Please try again.');
-      return;
+      // Check DB directly for shared direct conversations
+      const { data: myConvs } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id);
+
+      if (myConvs && myConvs.length > 0) {
+        const myConvIds = myConvs.map((c) => c.conversation_id);
+        const { data: shared } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', myConvIds)
+          .eq('user_id', recipient.id);
+
+        if (shared && shared.length > 0) {
+          const sharedIds = shared.map((s) => s.conversation_id);
+          const { data: directConvs } = await supabase
+            .from('conversations')
+            .select('id')
+            .in('id', sharedIds)
+            .eq('is_group', false)
+            .limit(1);
+
+          if (directConvs && directConvs.length > 0) {
+            existingConvId = directConvs[0].id;
+          }
+        }
+      }
+
+      if (existingConvId) {
+        await loadConversations();
+        handleSelectConversation(existingConvId);
+        return;
+      }
+
+      // 2. Generate a client UUID so we don't need .select() returning row (avoids RLS SELECT barrier)
+      const newConvId = crypto.randomUUID();
+
+      // 3. Insert conversation record without .select()
+      const { error: convErr } = await supabase
+        .from('conversations')
+        .insert({ id: newConvId, is_group: false });
+
+      if (convErr) {
+        console.error('Failed to create conversation:', convErr);
+        showToast(convErr.message || 'Failed to start chat. Please try again.');
+        return;
+      }
+
+      // 4. Add both members
+      const { error: memErr } = await supabase
+        .from('conversation_members')
+        .insert([
+          { conversation_id: newConvId, user_id: user.id, role: 'admin' },
+          { conversation_id: newConvId, user_id: recipient.id, role: 'member' },
+        ]);
+
+      if (memErr) {
+        console.error('Failed to add members:', memErr);
+        showToast(memErr.message || 'Failed to add conversation members.');
+        return;
+      }
+
+      // 5. Reload conversations & open the new conversation
+      await loadConversations();
+      handleSelectConversation(newConvId);
+      showToast('Chat started!', 'success');
+    } catch (err: any) {
+      console.error('Unexpected error starting chat:', err);
+      showToast(err.message || 'An unexpected error occurred.');
     }
-
-    await supabase.from('conversation_members').insert([
-      { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
-      { conversation_id: newConv.id, user_id: recipient.id, role: 'member' },
-    ]);
-
-    await loadConversations();
-    handleSelectConversation(newConv.id);
   };
 
   // ─── Create group channel ──────────────────────────────────────────────────
@@ -264,26 +405,41 @@ export const ChatDashboard: React.FC = () => {
     if (!user || !isConfigured) return;
     setShowNewChatModal(false);
 
-    const { data: newConv, error: convErr } = await supabase
-      .from('conversations')
-      .insert({ is_group: true, title: name })
-      .select()
-      .single();
+    try {
+      const newGroupId = crypto.randomUUID();
 
-    if (convErr || !newConv) {
-      console.error('Failed to create group:', convErr);
-      showToast('Failed to create group channel. Please try again.');
-      return;
+      const { error: convErr } = await supabase
+        .from('conversations')
+        .insert({ id: newGroupId, is_group: true, title: name });
+
+      if (convErr) {
+        console.error('Failed to create group:', convErr);
+        showToast(convErr.message || 'Failed to create group channel.');
+        return;
+      }
+
+      const inserts = [
+        { conversation_id: newGroupId, user_id: user.id, role: 'admin' },
+        ...memberIds.map((id) => ({ conversation_id: newGroupId, user_id: id, role: 'member' })),
+      ];
+
+      const { error: memErr } = await supabase
+        .from('conversation_members')
+        .insert(inserts);
+
+      if (memErr) {
+        console.error('Failed to add group members:', memErr);
+        showToast(memErr.message || 'Failed to add group members.');
+        return;
+      }
+
+      await loadConversations();
+      handleSelectConversation(newGroupId);
+      showToast('Group channel created!', 'success');
+    } catch (err: any) {
+      console.error('Unexpected error creating group:', err);
+      showToast(err.message || 'An unexpected error occurred.');
     }
-
-    const inserts = [
-      { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
-      ...memberIds.map((id) => ({ conversation_id: newConv.id, user_id: id, role: 'member' })),
-    ];
-    await supabase.from('conversation_members').insert(inserts);
-
-    await loadConversations();
-    handleSelectConversation(newConv.id);
   };
 
   // ─── Sign out ──────────────────────────────────────────────────────────────
@@ -317,6 +473,7 @@ export const ChatDashboard: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside
         initial={{ x: -10, opacity: 0 }}

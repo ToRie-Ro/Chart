@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON public.conversations(
 CREATE TABLE IF NOT EXISTS public.conversation_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     role TEXT DEFAULT 'member' NOT NULL,
     joined_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     last_read_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_cm_conversation_id ON public.conversation_members
 CREATE TABLE IF NOT EXISTS public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
-    sender_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     attachment_url TEXT,
     attachment_name TEXT,

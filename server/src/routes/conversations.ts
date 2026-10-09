@@ -145,11 +145,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
       }
 
       // Create new DM conversation
-      const { data: newConv, error: createErr } = await userClient
+      const convId = crypto.randomUUID();
+      const { error: createErr } = await supabaseAdmin
         .from('conversations')
-        .insert({ is_group: false })
-        .select()
-        .single();
+        .insert({ id: convId, is_group: false });
 
       if (createErr) throw createErr;
 
@@ -157,13 +156,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
       const { error: membersErr } = await supabaseAdmin
         .from('conversation_members')
         .insert([
-          { conversation_id: newConv.id, user_id: userId, role: 'admin' },
-          { conversation_id: newConv.id, user_id: recipientId, role: 'member' },
+          { conversation_id: convId, user_id: userId, role: 'admin' },
+          { conversation_id: convId, user_id: recipientId, role: 'member' },
         ]);
 
       if (membersErr) throw membersErr;
 
-      res.status(201).json(newConv);
+      res.status(201).json({ id: convId, is_group: false });
       return;
     }
 
@@ -171,19 +170,19 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
     if (validated.is_group) {
       const participantIds = Array.from(new Set([...(validated.participant_ids || []), userId]));
 
-      const { data: newGroup, error: groupErr } = await userClient
+      const groupId = crypto.randomUUID();
+      const { error: groupErr } = await supabaseAdmin
         .from('conversations')
         .insert({
+          id: groupId,
           title: validated.title || 'New Group',
           is_group: true,
-        })
-        .select()
-        .single();
+        });
 
       if (groupErr) throw groupErr;
 
       const membersToInsert = participantIds.map((pId) => ({
-        conversation_id: newGroup.id,
+        conversation_id: groupId,
         user_id: pId,
         role: pId === userId ? 'admin' : 'member',
       }));
@@ -194,7 +193,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction): Promis
 
       if (insertMembersErr) throw insertMembersErr;
 
-      res.status(201).json(newGroup);
+      res.status(201).json({ id: groupId, title: validated.title || 'New Group', is_group: true });
       return;
     }
 
