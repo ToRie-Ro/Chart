@@ -1,5 +1,5 @@
 services:
-  # 1. Backend Web Service (Node.js + Express)
+  # 1. Backend Web Service (Node.js + Express) - Hosted in Singapore
   - type: web
     name: bluewave-chat-server
     runtime: node
@@ -24,12 +24,11 @@ services:
       - key: SUPABASE_SECRET_KEY
         sync: false
 
-  # 2. Frontend Static Site (React + Vite SPA)
+  # 2. Frontend Static Site (React + Vite SPA) - Global CDN (no region allowed)
   - type: web
     name: bluewave-chat-client
     env: static
     plan: free
-    region: singapore
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
