@@ -218,12 +218,11 @@ export const ChatDashboard: React.FC = () => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
-  // ─── Start new chat with found user ───────────────────────────────────────
+  // ─── Start new DM with found user ─────────────────────────────────────────
   const handleStartChatWithUser = async (recipient: UserProfile) => {
     if (!user || !isConfigured) return;
     setShowNewChatModal(false);
 
-    // Check if conversation already exists between these two users
     const existing = conversations.find((conv) =>
       !conv.is_group &&
       conv.members?.length === 2 &&
@@ -231,28 +230,43 @@ export const ChatDashboard: React.FC = () => {
       conv.members.some((m) => m.user_id === user.id)
     );
 
-    if (existing) {
-      handleSelectConversation(existing.id);
-      return;
-    }
+    if (existing) { handleSelectConversation(existing.id); return; }
 
-    // Create new direct conversation
     const { data: newConv, error: convErr } = await supabase
       .from('conversations')
       .insert({ is_group: false, created_by: user.id })
       .select()
       .single();
 
-    if (convErr || !newConv) {
-      console.error('Failed to create conversation:', convErr);
-      return;
-    }
+    if (convErr || !newConv) { console.error('Failed to create conversation:', convErr); return; }
 
-    // Add both members
     await supabase.from('conversation_members').insert([
       { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
       { conversation_id: newConv.id, user_id: recipient.id, role: 'member' },
     ]);
+
+    await loadConversations();
+    handleSelectConversation(newConv.id);
+  };
+
+  // ─── Create group channel ──────────────────────────────────────────────────
+  const handleCreateGroup = async (name: string, memberIds: string[]) => {
+    if (!user || !isConfigured) return;
+    setShowNewChatModal(false);
+
+    const { data: newConv, error: convErr } = await supabase
+      .from('conversations')
+      .insert({ is_group: true, title: name, created_by: user.id })
+      .select()
+      .single();
+
+    if (convErr || !newConv) { console.error('Failed to create group:', convErr); return; }
+
+    const inserts = [
+      { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
+      ...memberIds.map((id) => ({ conversation_id: newConv.id, user_id: id, role: 'member' })),
+    ];
+    await supabase.from('conversation_members').insert(inserts);
 
     await loadConversations();
     handleSelectConversation(newConv.id);
@@ -365,6 +379,7 @@ export const ChatDashboard: React.FC = () => {
         isOpen={showNewChatModal}
         onClose={() => setShowNewChatModal(false)}
         onSelectUser={handleStartChatWithUser}
+        onCreateGroup={handleCreateGroup}
       />
     </div>
   );
