@@ -3,7 +3,6 @@ services:
   - type: web
     name: bluewave-chat-server
     runtime: node
-    plan: free
     region: singapore
     rootDir: server
     buildCommand: npm install && npm run build
@@ -24,11 +23,10 @@ services:
       - key: SUPABASE_SECRET_KEY
         sync: false
 
-  # 2. Frontend Static Site (React + Vite SPA) - Global CDN (no region allowed)
+  # 2. Frontend Static Site (React + Vite SPA) - Global Edge CDN
   - type: web
     name: bluewave-chat-client
     env: static
-    plan: free
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
