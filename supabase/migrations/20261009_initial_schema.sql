@@ -1,5 +1,6 @@
 -- Bluewave Chat Supabase Initial Schema & RLS Policies
 -- Compatible with PostgreSQL 15+ & Supabase Auth
+-- Fully idempotent (can be run repeatedly without errors)
 
 -- Enable UUID extension if not enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -125,108 +126,134 @@ ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- 8. ROW LEVEL SECURITY POLICIES
+-- 8. ROW LEVEL SECURITY POLICIES (with DROP IF EXISTS to ensure idempotency)
 
 -- Profiles:
--- Anyone authenticated can view all profiles (needed for search and chat participant display)
+DROP POLICY IF EXISTS "Profiles are viewable by authenticated users" ON public.profiles;
 CREATE POLICY "Profiles are viewable by authenticated users"
     ON public.profiles FOR SELECT
     TO authenticated
     USING (true);
 
--- Users can insert and update their own profile
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile"
     ON public.profiles FOR INSERT
     TO authenticated
     WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
     ON public.profiles FOR UPDATE
     TO authenticated
     USING (auth.uid() = id);
 
--- Conversation Members:
--- Allow authenticated users to view membership records (clean non-recursive policy)
+-- Conversation Members: (Non-recursive clean policy)
+DROP POLICY IF EXISTS "Members can view conversation members" ON public.conversation_members;
+DROP POLICY IF EXISTS "Authenticated users can view conversation members" ON public.conversation_members;
 CREATE POLICY "Authenticated users can view conversation members"
     ON public.conversation_members FOR SELECT
     TO authenticated
     USING (true);
 
--- Authenticated users can insert conversation members (e.g. creating a chat or joining)
+DROP POLICY IF EXISTS "Users can join conversations" ON public.conversation_members;
+DROP POLICY IF EXISTS "Authenticated users can insert conversation members" ON public.conversation_members;
 CREATE POLICY "Authenticated users can insert conversation members"
     ON public.conversation_members FOR INSERT
     TO authenticated
     WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Users can leave conversations" ON public.conversation_members;
 CREATE POLICY "Users can leave conversations"
     ON public.conversation_members FOR DELETE
     TO authenticated
     USING (user_id = auth.uid());
 
 -- Conversations:
--- Users can view conversations if they are a member
+DROP POLICY IF EXISTS "Members can view conversations" ON public.conversations;
 CREATE POLICY "Members can view conversations"
     ON public.conversations FOR SELECT
     TO authenticated
     USING (
         id IN (
-            SELECT cm.conversation_id FROM public.conversation_members cm WHERE cm.user_id = auth.uid()
+            SELECT cm.conversation_id
+            FROM public.conversation_members cm
+            WHERE cm.user_id = auth.uid()
         )
     );
 
--- Any authenticated user can create a conversation
+DROP POLICY IF EXISTS "Users can create conversations" ON public.conversations;
 CREATE POLICY "Users can create conversations"
     ON public.conversations FOR INSERT
     TO authenticated
     WITH CHECK (true);
 
--- Members can update conversation title/updated_at
+DROP POLICY IF EXISTS "Members can update conversations" ON public.conversations;
 CREATE POLICY "Members can update conversations"
     ON public.conversations FOR UPDATE
     TO authenticated
     USING (
         id IN (
-            SELECT cm.conversation_id FROM public.conversation_members cm WHERE cm.user_id = auth.uid()
+            SELECT cm.conversation_id
+            FROM public.conversation_members cm
+            WHERE cm.user_id = auth.uid()
         )
     );
 
 -- Messages:
--- Users can view messages only if they are a member of the conversation
+DROP POLICY IF EXISTS "Members can view messages" ON public.messages;
 CREATE POLICY "Members can view messages"
     ON public.messages FOR SELECT
     TO authenticated
     USING (
         conversation_id IN (
-            SELECT cm.conversation_id FROM public.conversation_members cm WHERE cm.user_id = auth.uid()
+            SELECT cm.conversation_id
+            FROM public.conversation_members cm
+            WHERE cm.user_id = auth.uid()
         )
         AND deleted_at IS NULL
     );
 
--- Users can insert messages if they are a member and the sender is themselves
+DROP POLICY IF EXISTS "Members can insert messages" ON public.messages;
 CREATE POLICY "Members can insert messages"
     ON public.messages FOR INSERT
     TO authenticated
     WITH CHECK (
         auth.uid() = sender_id
         AND conversation_id IN (
-            SELECT cm.conversation_id FROM public.conversation_members cm WHERE cm.user_id = auth.uid()
+            SELECT cm.conversation_id
+            FROM public.conversation_members cm
+            WHERE cm.user_id = auth.uid()
         )
     );
 
--- Users can update (edit/soft-delete) their own messages
+DROP POLICY IF EXISTS "Senders can update own messages" ON public.messages;
 CREATE POLICY "Senders can update own messages"
     ON public.messages FOR UPDATE
     TO authenticated
     USING (auth.uid() = sender_id);
 
--- 9. SUPABASE REALTIME CONFIGURATION
--- Add tables to realtime publication
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.conversation_members;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+-- 9. SUPABASE REALTIME CONFIGURATION (idempotent block)
+DO $$
+BEGIN
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+    EXCEPTION WHEN duplicate_object THEN
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
+    EXCEPTION WHEN duplicate_object THEN
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.conversation_members;
+    EXCEPTION WHEN duplicate_object THEN
+    END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+    EXCEPTION WHEN duplicate_object THEN
+    END;
+END $$;
 
--- 10. STORAGE BUCKETS SETUP (avartars, chat-attachments)
+-- 10. STORAGE BUCKETS SETUP (avatars, chat-attachments)
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
@@ -235,27 +262,32 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('chat-attachments', 'chat-attachments', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage policies:
+-- Storage policies (with DROP IF EXISTS to avoid duplicate policy errors)
+DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
 CREATE POLICY "Avatar images are publicly accessible"
     ON storage.objects FOR SELECT
     TO public
     USING (bucket_id = 'avatars');
 
+DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
 CREATE POLICY "Authenticated users can upload avatars"
     ON storage.objects FOR INSERT
     TO authenticated
     WITH CHECK (bucket_id = 'avatars');
 
+DROP POLICY IF EXISTS "Users can update their avatars" ON storage.objects;
 CREATE POLICY "Users can update their avatars"
     ON storage.objects FOR UPDATE
     TO authenticated
     USING (bucket_id = 'avatars');
 
+DROP POLICY IF EXISTS "Chat attachments are viewable by authenticated users" ON storage.objects;
 CREATE POLICY "Chat attachments are viewable by authenticated users"
     ON storage.objects FOR SELECT
     TO authenticated
     USING (bucket_id = 'chat-attachments');
 
+DROP POLICY IF EXISTS "Authenticated users can upload chat attachments" ON storage.objects;
 CREATE POLICY "Authenticated users can upload chat attachments"
     ON storage.objects FOR INSERT
     TO authenticated
