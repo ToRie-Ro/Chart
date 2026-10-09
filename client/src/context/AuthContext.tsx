@@ -14,7 +14,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
   updateUserPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
-  updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
+  updateUserProfile: (data: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
   isConfigured: boolean;
 }
 
@@ -145,18 +145,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateUserProfile = async (data: Partial<UserProfile>) => {
-    if (!isSupabaseConfigured) return;
-    if (user) {
-      try {
-        const { data: updated, error } = await supabase
-          .from('profiles')
-          .update({ ...data, updated_at: new Date().toISOString() })
-          .eq('id', user.id)
-          .select()
-          .single();
-        if (!error && updated) setProfile(updated);
-      } catch { /* ignore */ }
+  const updateUserProfile = async (data: Partial<UserProfile>): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured) return { success: false, error: 'Supabase is not configured' };
+    if (!user) return { success: false, error: 'User is not logged in' };
+    try {
+      const { data: updated, error } = await supabase
+        .from('profiles')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', user.id)
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      if (updated) {
+        setProfile(updated);
+        return { success: true };
+      }
+      return { success: false, error: 'Failed to update profile' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'An error occurred' };
     }
   };
 

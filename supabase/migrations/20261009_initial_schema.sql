@@ -11,12 +11,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     display_name TEXT NOT NULL,
     username TEXT UNIQUE,
     avatar_url TEXT,
+    banner_url TEXT,
     bio TEXT,
     status TEXT DEFAULT 'online',
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+-- Ensure banner_url column exists if table was already created
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS banner_url TEXT;
 
 -- Index for searching users
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);

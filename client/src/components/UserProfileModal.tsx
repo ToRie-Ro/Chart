@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MessageSquare, Copy, Check, Calendar, AtSign, Shield, Waves } from 'lucide-react';
+import { X, MessageSquare, Copy, Check, Calendar, Shield } from 'lucide-react';
 import { UserProfile } from '../lib/types';
 import { format } from 'date-fns';
 
@@ -50,11 +50,31 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
           >
             <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden pointer-events-auto relative">
-              {/* Top Banner with gradient */}
-              <div className="h-28 bg-gradient-to-tr from-blue-700 via-indigo-700 to-cyan-500 relative flex items-start justify-end p-3">
+              {/* Top Banner (custom image, animated GIF, or dynamic animated gradient) */}
+              <div className="h-32 relative overflow-hidden flex items-start justify-end p-3">
+                {user.banner_url ? (
+                  <img
+                    src={user.banner_url}
+                    alt="Banner"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-700 via-indigo-700 to-cyan-500 overflow-hidden">
+                    <motion.div
+                      animate={{ scale: [1, 1.25, 1], rotate: [0, 90, 0] }}
+                      transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+                      className="absolute -top-10 -left-10 w-44 h-44 bg-cyan-400/25 rounded-full blur-2xl pointer-events-none"
+                    />
+                    <motion.div
+                      animate={{ scale: [1.2, 1, 1.2], rotate: [0, -90, 0] }}
+                      transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+                      className="absolute -bottom-10 -right-10 w-44 h-44 bg-purple-500/30 rounded-full blur-2xl pointer-events-none"
+                    />
+                  </div>
+                )}
                 <button
                   onClick={onClose}
-                  className="p-1.5 bg-black/30 hover:bg-black/50 text-white rounded-full transition backdrop-blur-sm"
+                  className="p-1.5 bg-black/40 hover:bg-black/70 text-white rounded-full transition backdrop-blur-md relative z-10"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -64,15 +84,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <div className="px-6 pb-6 pt-0 relative">
                 <div className="flex items-end justify-between -mt-14 mb-4">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-900 shadow-xl flex items-center justify-center">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-900 shadow-2xl flex items-center justify-center relative group cursor-pointer"
+                    >
                       {user.avatar_url ? (
-                        <img src={user.avatar_url} alt={user.display_name} className="w-full h-full object-cover" />
+                        <img
+                          src={user.avatar_url}
+                          alt={user.display_name}
+                          className="w-full h-full object-cover transition duration-300 group-hover:brightness-105"
+                        />
                       ) : (
                         <span className="text-white font-extrabold text-3xl">
                           {user.display_name?.charAt(0)?.toUpperCase() || '?'}
                         </span>
                       )}
-                    </div>
+                    </motion.div>
                     <span
                       className={`absolute bottom-1 right-1 w-4 h-4 rounded-full ring-2 ring-slate-900 ${
                         isOnline ? 'bg-emerald-500' : 'bg-slate-600'

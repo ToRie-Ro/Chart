@@ -5,6 +5,7 @@ export interface UserProfile {
   display_name: string;
   username: string;
   avatar_url?: string | null;
+  banner_url?: string | null;
   bio?: string | null;
   status?: UserStatus;
   last_seen?: string;
