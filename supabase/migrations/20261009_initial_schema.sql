@@ -146,21 +146,22 @@ CREATE POLICY "Users can update their own profile"
     USING (auth.uid() = id);
 
 -- Conversation Members:
--- Users can see memberships for conversations they belong to
-CREATE POLICY "Members can view conversation members"
+-- Allow authenticated users to view membership records (clean non-recursive policy)
+CREATE POLICY "Authenticated users can view conversation members"
     ON public.conversation_members FOR SELECT
     TO authenticated
-    USING (
-        conversation_id IN (
-            SELECT cm.conversation_id FROM public.conversation_members cm WHERE cm.user_id = auth.uid()
-        )
-    );
+    USING (true);
 
 -- Authenticated users can insert conversation members (e.g. creating a chat or joining)
-CREATE POLICY "Users can join conversations"
+CREATE POLICY "Authenticated users can insert conversation members"
     ON public.conversation_members FOR INSERT
     TO authenticated
     WITH CHECK (true);
+
+CREATE POLICY "Users can leave conversations"
+    ON public.conversation_members FOR DELETE
+    TO authenticated
+    USING (user_id = auth.uid());
 
 -- Conversations:
 -- Users can view conversations if they are a member

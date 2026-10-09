@@ -126,6 +126,9 @@ export const ChatDashboard: React.FC = () => {
       setConversations(enriched);
     } catch (err: any) {
       console.error('Failed to load conversations:', err);
+      if (err?.message?.includes('recursion') || err?.code === '42P17') {
+        showToast('Database RLS recursion error. Please run the SQL fix in Supabase.');
+      }
     } finally {
       setLoadingConversations(false);
     }
@@ -173,6 +176,9 @@ export const ChatDashboard: React.FC = () => {
       setMessages(enriched as Message[]);
     } catch (err: any) {
       console.error('Failed to load messages:', err);
+      if (err?.message?.includes('recursion') || err?.code === '42P17') {
+        showToast('Database RLS recursion error. Please run the SQL fix in Supabase.');
+      }
     } finally {
       setLoadingMessages(false);
     }
@@ -253,6 +259,28 @@ export const ChatDashboard: React.FC = () => {
   ) => {
     if (!selectedConversationId || !user || !isConfigured) return;
 
+    const optimisticId = crypto.randomUUID();
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      conversation_id: selectedConversationId,
+      sender_id: user.id,
+      content: content || ' ',
+      attachment_url: attachment?.url,
+      attachment_name: attachment?.name,
+      attachment_type: attachment?.type,
+      attachment_size: attachment?.size,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sender: profile || {
+        id: user.id,
+        display_name: user.email?.split('@')[0] || 'You',
+        username: user.email?.split('@')[0] || 'you',
+      },
+    };
+
+    // Optimistically show message immediately
+    setMessages((prev) => [...prev, optimisticMsg]);
+
     const msgData: Record<string, unknown> = {
       conversation_id: selectedConversationId,
       sender_id: user.id,
@@ -273,18 +301,9 @@ export const ChatDashboard: React.FC = () => {
       .single();
 
     if (!error && data) {
-      const fullMsg: Message = {
-        ...data,
-        sender: profile || {
-          id: user.id,
-          display_name: user.email?.split('@')[0] || 'You',
-          username: user.email?.split('@')[0] || 'you',
-        },
-      };
-      setMessages((prev) => {
-        if (prev.find((m) => m.id === fullMsg.id)) return prev;
-        return [...prev, fullMsg];
-      });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticId ? { ...data, sender: optimisticMsg.sender } : m))
+      );
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
@@ -292,7 +311,11 @@ export const ChatDashboard: React.FC = () => {
       loadConversations();
     } else if (error) {
       console.error('Send message error:', error);
-      showToast(error.message || 'Failed to send message.');
+      if (error.message?.includes('recursion') || error.code === '42P17') {
+        showToast('Database RLS error. Please run the SQL fix script in Supabase.');
+      } else {
+        showToast(error.message || 'Failed to send message.');
+      }
     }
   };
 
@@ -390,9 +413,48 @@ export const ChatDashboard: React.FC = () => {
         return;
       }
 
-      // 5. Reload conversations & open the new conversation
-      await loadConversations();
-      handleSelectConversation(newConvId);
+      // 5. Optimistically add conversation to state immediately so UI updates in 0ms
+      const newConvObj: Conversation = {
+        id: newConvId,
+        title: null,
+        is_group: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        members: [
+          {
+            id: crypto.randomUUID(),
+            conversation_id: newConvId,
+            user_id: user.id,
+            role: 'admin',
+            joined_at: new Date().toISOString(),
+            last_read_at: new Date().toISOString(),
+            profiles: profile || {
+              id: user.id,
+              display_name: user.email?.split('@')[0] || 'You',
+              username: user.email?.split('@')[0] || 'you',
+            },
+          },
+          {
+            id: crypto.randomUUID(),
+            conversation_id: newConvId,
+            user_id: recipient.id,
+            role: 'member',
+            joined_at: new Date().toISOString(),
+            last_read_at: new Date().toISOString(),
+            profiles: recipient,
+          },
+        ],
+        last_message: null,
+        unread_count: 0,
+      };
+
+      setConversations((prev) => [newConvObj, ...prev.filter((c) => c.id !== newConvId)]);
+      setSelectedConversationId(newConvId);
+      setMessages([]);
+      setShowMobileChat(true);
+
+      // Background reload
+      loadConversations();
       showToast('Chat started!', 'success');
     } catch (err: any) {
       console.error('Unexpected error starting chat:', err);
