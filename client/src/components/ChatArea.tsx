@@ -50,7 +50,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [showEmoji, setShowEmoji] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -66,6 +68,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Helpers to detect media type
+  const isImageType = (type?: string | null, name?: string | null) => {
+    if (type) return type.startsWith('image/');
+    if (name) return /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i.test(name);
+    return false;
+  };
+  const isVideoType = (type?: string | null, name?: string | null) => {
+    if (type) return type.startsWith('video/');
+    if (name) return /\.(mp4|webm|mov|mkv|avi|ogv)$/i.test(name);
+    return false;
+  };
 
   // Auto-scroll
   useEffect(() => {
@@ -236,6 +250,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       await onSendMessage(inputText.trim(), attachment, replyTo?.id);
       setInputText('');
       setSelectedFile(null);
+      setSelectedFilePreview(null);
       setReplyTo(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } finally {
@@ -469,8 +484,42 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                             </div>
                           )}
 
-                          {/* Attachment */}
-                          {msg.attachment_name && (
+                          {/* ── Attachment: Image ── */}
+                          {msg.attachment_url && isImageType(msg.attachment_type, msg.attachment_name) && (
+                            <div className="mb-2 overflow-hidden rounded-xl cursor-pointer max-w-xs" onClick={() => setLightbox({ url: msg.attachment_url!, type: 'image' })}>
+                              <img
+                                src={msg.attachment_url}
+                                alt={msg.attachment_name || 'image'}
+                                className="w-full max-h-72 object-cover hover:opacity-90 transition rounded-xl"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
+
+                          {/* ── Attachment: Video ── */}
+                          {msg.attachment_url && isVideoType(msg.attachment_type, msg.attachment_name) && (
+                            <div className="mb-2 rounded-xl overflow-hidden max-w-xs bg-black cursor-pointer relative group/vid"
+                                 onClick={() => setLightbox({ url: msg.attachment_url!, type: 'video' })}>
+                              <video
+                                src={msg.attachment_url}
+                                className="w-full max-h-64 object-contain rounded-xl"
+                                preload="metadata"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover/vid:bg-black/50 transition rounded-xl">
+                                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-white ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                  </svg>
+                                </div>
+                              </div>
+                              {msg.attachment_name && (
+                                <p className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white bg-black/50 truncate">{msg.attachment_name}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Attachment: File (non-image, non-video) ── */}
+                          {msg.attachment_name && !isImageType(msg.attachment_type, msg.attachment_name) && !isVideoType(msg.attachment_type, msg.attachment_name) && (
                             <div className="mb-2 p-2.5 rounded-xl bg-black/20 border border-white/10 flex items-center gap-2.5">
                               <div className="p-1.5 rounded-lg bg-blue-500/20">
                                 <FileText className="w-4 h-4 text-cyan-300" />
@@ -631,9 +680,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             exit={{ height: 0, opacity: 0 }}
             className="px-4 py-2 bg-slate-900/95 border-t border-slate-800 flex items-center gap-3 overflow-hidden z-10"
           >
-            <FileText className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-            <span className="text-xs text-slate-300 truncate flex-1">{selectedFile.name}</span>
-            <button onClick={() => setSelectedFile(null)} className="text-slate-400 hover:text-red-400 transition p-1">
+            {selectedFilePreview && isImageType(selectedFile.type) ? (
+              <img src={selectedFilePreview} alt="preview" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-slate-700" />
+            ) : selectedFilePreview && isVideoType(selectedFile.type) ? (
+              <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 border border-slate-700">
+                <svg className="w-5 h-5 text-cyan-400 ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                </svg>
+              </div>
+            ) : (
+              <FileText className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <span className="text-xs text-slate-300 truncate block">{selectedFile.name}</span>
+              <span className="text-[10px] text-slate-500">{(selectedFile.size / 1024).toFixed(0)} KB</span>
+            </div>
+            <button onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }} className="text-slate-400 hover:text-red-400 transition p-1">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -670,7 +732,24 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           />
         ) : (
           <form onSubmit={handleSend} className="flex flex-1 items-end gap-1.5 sm:gap-2">
-            <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && setSelectedFile(e.target.files[0])} className="hidden" />
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                setSelectedFile(f);
+                if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
+                  const url = URL.createObjectURL(f);
+                  setSelectedFilePreview(url);
+                } else {
+                  setSelectedFilePreview(null);
+                }
+                e.target.value = '';
+              }}
+              className="hidden"
+            />
 
             <button type="button" onClick={() => fileInputRef.current?.click()}
               className="p-2 sm:p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0"
@@ -715,6 +794,58 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </form>
         )}
       </div>
+
+      {/* ── Lightbox ── */}
+      <AnimatePresence>
+        {lightbox && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setLightbox(null)}
+          >
+            <button
+              className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/40 rounded-full p-2 transition"
+              onClick={() => setLightbox(null)}
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-4xl max-h-[90vh] w-full flex items-center justify-center"
+            >
+              {lightbox.type === 'image' ? (
+                <img
+                  src={lightbox.url}
+                  alt="Full size"
+                  className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+                />
+              ) : (
+                <video
+                  src={lightbox.url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl bg-black"
+                />
+              )}
+            </motion.div>
+            <a
+              href={lightbox.url}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-4 right-4 text-white/70 hover:text-white bg-black/40 rounded-full p-2 transition"
+              title="Download"
+            >
+              <Download className="w-5 h-5" />
+            </a>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

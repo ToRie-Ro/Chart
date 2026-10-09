@@ -19,7 +19,8 @@ CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON public.message_reactions(
 -- RLS for reactions
 ALTER TABLE public.message_reactions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Members can view reactions"
+DROP POLICY IF EXISTS "Members can view reactions" ON public.message_reactions;
+CREATE POLICY "Members can view reactions"
   ON public.message_reactions FOR SELECT TO authenticated
   USING (
     message_id IN (
@@ -30,13 +31,26 @@ CREATE POLICY IF NOT EXISTS "Members can view reactions"
     )
   );
 
-CREATE POLICY IF NOT EXISTS "Members can add reactions"
+DROP POLICY IF EXISTS "Members can add reactions" ON public.message_reactions;
+CREATE POLICY "Members can add reactions"
   ON public.message_reactions FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can remove own reactions"
+DROP POLICY IF EXISTS "Users can remove own reactions" ON public.message_reactions;
+CREATE POLICY "Users can remove own reactions"
   ON public.message_reactions FOR DELETE TO authenticated
   USING (auth.uid() = user_id);
 
 -- Add reactions to realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.message_reactions;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+      AND schemaname = 'public' 
+      AND tablename = 'message_reactions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.message_reactions;
+  END IF;
+END $$;
+
