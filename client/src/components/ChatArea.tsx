@@ -2,20 +2,28 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Smile, Phone, Video, MoreVertical,
-  ArrowLeft, Trash2, CheckCheck, FileText, Download, X, Loader2, User as UserIcon
+  ArrowLeft, Trash2, CheckCheck, FileText, Download, X, Loader2, User as UserIcon, Mic, Reply, Search, Plus
 } from 'lucide-react';
-import { Message, Conversation, UserProfile } from '../lib/types';
+import { Message, Conversation, UserProfile, MessageReaction } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { format, isToday } from 'date-fns';
-import { api } from '../lib/api';
+import { VoiceRecorder } from './VoiceRecorder';
+import { MessageSearch } from './MessageSearch';
+import { ReactionPicker } from './ReactionPicker';
 
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '😊', '🎉', '👋', '😂', '💯', '🙏'];
 
 interface ChatAreaProps {
   conversation: Conversation | null;
   messages: Message[];
-  onSendMessage: (content: string, attachment?: { url: string; name: string; type: string; size: number }) => Promise<void>;
+  onSendMessage: (
+    content: string, 
+    attachment?: { url: string; name: string; type: string; size: number },
+    replyToId?: string,
+    voiceUrl?: string,
+    voiceDuration?: number
+  ) => Promise<void>;
   onDeleteMessage?: (id: string) => Promise<void>;
   onDeleteConversation?: (id: string) => Promise<void>;
   onViewProfile?: (user: UserProfile) => void;
@@ -23,8 +31,8 @@ interface ChatAreaProps {
   loading?: boolean;
 }
 
-const Avatar: React.FC<{ name: string; url?: string | null; size?: number }> = ({ name, url, size = 9 }) => (
-  <div className={`w-${size} h-${size} flex-shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center`}>
+const Avatar: React.FC<{ name: string; url?: string | null; sizeClass?: string }> = ({ name, url, sizeClass = "w-9 h-9" }) => (
+  <div className={`${sizeClass} flex-shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center`}>
     {url ? (
       <img src={url} alt={name} className="w-full h-full object-cover" />
     ) : (
@@ -47,9 +55,139 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // New states
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, MessageReaction[]>>({});
+  
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, typingUsers]);
+
+  // Read Receipts
+  const markAsRead = useCallback(async () => {
+    if (!user || !conversation) return;
+    await supabase
+      .from('conversation_members')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('conversation_id', conversation.id)
+      .eq('user_id', user.id);
+  }, [user?.id, conversation?.id]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      markAsRead();
+    }
+  }, [messages, markAsRead]);
+
+  const getReadStatus = (msg: Message): 'sent' | 'delivered' | 'read' => {
+    if (!conversation) return 'sent';
+    const otherMembers = conversation.members.filter(m => m.user_id !== user?.id);
+    const anyRead = otherMembers.some(m => 
+      m.last_read_at && new Date(m.last_read_at) >= new Date(msg.created_at)
+    );
+    return anyRead ? 'read' : 'sent';
+  };
+
+  // Reactions
+  const loadReactions = async (messageIds: string[]) => {
+    if (messageIds.length === 0) return;
+    const { data } = await supabase
+      .from('message_reactions')
+      .select('*, profiles(display_name)')
+      .in('message_id', messageIds);
+    if (data) {
+      const grouped: Record<string, MessageReaction[]> = {};
+      data.forEach(r => {
+        if (!grouped[r.message_id]) grouped[r.message_id] = [];
+        grouped[r.message_id].push(r);
+      });
+      setReactions(prev => ({ ...prev, ...grouped }));
+    }
+  };
+
+  useEffect(() => {
+    const ids = messages.map(m => m.id);
+    if (ids.length > 0) {
+      loadReactions(ids);
+    }
   }, [messages]);
+
+  useEffect(() => {
+    if (!conversation) return;
+    const channel = supabase.channel('message_reactions_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (payload) => {
+        // Reload reactions for safety, or update state manually. For simplicity we reload for the affected msg
+        if (payload.new && (payload.new as any).message_id) {
+           loadReactions([(payload.new as any).message_id]);
+        } else if (payload.old && (payload.old as any).message_id) {
+           loadReactions([(payload.old as any).message_id]);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [conversation?.id]);
+
+  const handleAddReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    const existing = reactions[messageId]?.find(r => r.emoji === emoji && r.user_id === user.id);
+    if (existing) {
+      // toggle off
+      await supabase.from('message_reactions').delete().eq('id', existing.id);
+      setReactions(prev => ({
+        ...prev,
+        [messageId]: (prev[messageId] || []).filter(r => r.id !== existing.id)
+      }));
+    } else {
+      const { data } = await supabase.from('message_reactions')
+        .insert({ message_id: messageId, user_id: user.id, emoji })
+        .select('*, profiles(display_name)').single();
+      if (data) {
+        setReactions(prev => ({
+          ...prev,
+          [messageId]: [...(prev[messageId] || []), data as MessageReaction]
+        }));
+      }
+    }
+    setReactionPickerMsgId(null);
+  };
+
+  // Typing
+  const handleTyping = () => {
+    if (typingChannelRef.current) {
+      typingChannelRef.current.track({ user_id: user?.id, display_name: profile?.display_name });
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannelRef.current?.untrack();
+    }, 2500);
+  };
+
+  useEffect(() => {
+    if (!conversation?.id || !user) return;
+    const channel = supabase.channel(`typing:${conversation.id}`, {
+      config: { presence: { key: user.id } }
+    })
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      const typers = Object.values(state)
+        .flat()
+        .filter((p: any) => p.user_id !== user.id)
+        .map((p: any) => p.display_name);
+      setTypingUsers(typers);
+    })
+    .subscribe();
+    typingChannelRef.current = channel;
+    return () => { supabase.removeChannel(channel); };
+  }, [conversation?.id, user?.id]);
 
   const autoResizeTextarea = () => {
     if (textareaRef.current) {
@@ -95,19 +233,37 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           attachment = { url: data.publicUrl, name: selectedFile.name, type: selectedFile.type, size: selectedFile.size };
         }
       }
-      await onSendMessage(inputText.trim(), attachment);
+      await onSendMessage(inputText.trim(), attachment, replyTo?.id);
       setInputText('');
       setSelectedFile(null);
+      setReplyTo(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } finally {
       setIsSending(false);
     }
   };
 
+  const handleVoiceRecorded = async (url: string, duration: number) => {
+    setShowVoiceRecorder(false);
+    await onSendMessage('', undefined, replyTo?.id, url, duration);
+    setReplyTo(null);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    } else {
+      handleTyping();
+    }
+  };
+
+  const scrollToMessage = (messageId: string) => {
+    const el = messageRefs.current[messageId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-blue-500/20');
+      setTimeout(() => el.classList.remove('bg-blue-500/20'), 2000);
     }
   };
 
@@ -123,9 +279,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#090e17] overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-[#090e17] overflow-hidden relative">
       {/* Header */}
-      <div className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900/80 border-b border-slate-800/60 flex items-center justify-between backdrop-blur-md flex-shrink-0">
+      <div className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900/80 border-b border-slate-800/60 flex items-center justify-between backdrop-blur-md flex-shrink-0 z-10">
         <div
           onClick={() => {
             if (!conversation.is_group && otherMember && onViewProfile) {
@@ -148,7 +304,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </button>
           )}
           <div className="relative">
-            <Avatar name={chatTitle} url={avatarUrl} size={10} />
+            <Avatar name={chatTitle} url={avatarUrl} sizeClass="w-10 h-10" />
             {!conversation.is_group && (
               <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-slate-900 ${isOnline ? 'bg-emerald-500' : 'bg-slate-600'}`} />
             )}
@@ -163,6 +319,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1 text-slate-400 relative">
+          <button onClick={() => setShowSearch(p => !p)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Search className="w-4 h-4" /></button>
           <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Phone className="w-4 h-4" /></button>
           <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Video className="w-4 h-4" /></button>
           <button onClick={() => setShowMenu((prev) => !prev)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition">
@@ -208,8 +365,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       </div>
 
+      {/* Search Bar */}
+      <AnimatePresence>
+        {showSearch && (
+          <div className="absolute top-16 left-0 right-0 z-20 shadow-lg">
+            <MessageSearch 
+              conversationId={conversation.id} 
+              onClose={() => setShowSearch(false)} 
+              onScrollToMessage={scrollToMessage} 
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 relative" onClick={() => setReactionPickerMsgId(null)}>
         {loading ? (
           <div className="flex flex-col gap-4 py-4">
             {[1, 2, 3].map((i) => (
@@ -225,7 +395,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             className="flex flex-col items-center justify-center h-full text-center py-20"
           >
             <div className="w-16 h-16 rounded-full bg-blue-600/10 flex items-center justify-center mb-4">
-              <Avatar name={chatTitle} url={avatarUrl} size={10} />
+              <Avatar name={chatTitle} url={avatarUrl} sizeClass="w-10 h-10" />
             </div>
             <p className="text-white font-semibold">{chatTitle}</p>
             <p className="text-slate-400 text-sm mt-1">Send a message to start the conversation!</p>
@@ -249,12 +419,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   return (
                     <motion.div
                       key={msg.id}
+                      ref={el => messageRefs.current[msg.id] = el}
                       initial={{ opacity: 0, y: 10, scale: 0.97 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ duration: 0.2 }}
                       onHoverStart={() => setHoveredMsg(msg.id)}
                       onHoverEnd={() => setHoveredMsg(null)}
-                      className={`flex group ${isMe ? 'justify-end' : 'justify-start'} mb-1`}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setReactionPickerMsgId(msg.id);
+                      }}
+                      className={`flex group ${isMe ? 'justify-end' : 'justify-start'} mb-2 relative rounded transition-colors`}
                     >
                       {/* Other user avatar */}
                       {!isMe && (
@@ -263,11 +438,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           className={`w-8 flex-shrink-0 mr-2 mt-auto ${msg.sender ? 'cursor-pointer hover:opacity-80 transition' : ''}`}
                           title={msg.sender ? `View ${msg.sender.display_name}'s profile` : undefined}
                         >
-                          {showAvatar && <Avatar name={msg.sender?.display_name || 'U'} url={msg.sender?.avatar_url} size={8} />}
+                          {showAvatar && <Avatar name={msg.sender?.display_name || 'U'} url={msg.sender?.avatar_url} sizeClass="w-8 h-8" />}
                         </div>
                       )}
 
-                      <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                      <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%] relative`}>
                         {/* Sender name in group */}
                         {conversation.is_group && !isMe && showAvatar && (
                           <span
@@ -284,6 +459,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                             ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white rounded-br-sm'
                             : 'bg-slate-800 text-slate-100 rounded-bl-sm border border-slate-700/50'
                         }`}>
+                          
+                          {/* Replied-to preview */}
+                          {msg.reply_to && (
+                            <div className="mb-2 pl-3 py-1 border-l-2 border-white/30 bg-black/10 rounded-r-md opacity-90 cursor-pointer"
+                                 onClick={() => scrollToMessage(msg.reply_to!.id)}>
+                              <p className="text-[10px] font-bold text-white/90">{msg.reply_to.sender?.display_name || 'User'}</p>
+                              <p className="text-xs truncate text-white/80">{msg.reply_to.content || '🎤 Voice message'}</p>
+                            </div>
+                          )}
+
                           {/* Attachment */}
                           {msg.attachment_name && (
                             <div className="mb-2 p-2.5 rounded-xl bg-black/20 border border-white/10 flex items-center gap-2.5">
@@ -304,6 +489,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                               )}
                             </div>
                           )}
+                          
+                          {/* Voice Message */}
+                          {msg.voice_url && (
+                            <div className="flex items-center gap-3 min-w-[180px] mb-1">
+                              <audio src={msg.voice_url} controls className="h-8 max-w-full" />
+                              {msg.voice_duration && (
+                                <span className="text-xs opacity-70">{Math.floor(msg.voice_duration / 60)}:{String(msg.voice_duration % 60).padStart(2, '0')}</span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Content */}
                           {msg.content && (
@@ -311,25 +506,72 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           )}
 
                           {/* Time & status */}
-                          <div className={`flex items-center gap-1 mt-1 justify-end ${isMe ? 'text-blue-200/80' : 'text-slate-500'} text-[10px]`}>
+                          <div className={`flex items-center gap-1 mt-1 justify-end ${isMe ? 'text-blue-200/80' : 'text-slate-400'} text-[10px]`}>
                             <span>{timeStr}</span>
-                            {isMe && <CheckCheck className="w-3 h-3" />}
+                            {isMe && <CheckCheck className={`w-3 h-3 ${getReadStatus(msg) === 'read' ? 'text-cyan-400' : 'opacity-70'}`} />}
                           </div>
                         </div>
 
-                        {/* Delete hover action */}
+                        {/* Reaction display */}
+                        {reactions[msg.id]?.length > 0 && (
+                          <div className={`flex flex-wrap gap-1 mt-1 z-10 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            {Object.entries(
+                              reactions[msg.id].reduce<Record<string, { count: number; mine: boolean; users: string[] }>>((acc, r) => {
+                                if (!acc[r.emoji]) acc[r.emoji] = { count: 0, mine: false, users: [] };
+                                acc[r.emoji].count++;
+                                if (r.profiles?.display_name) acc[r.emoji].users.push(r.profiles.display_name);
+                                if (r.user_id === user?.id) acc[r.emoji].mine = true;
+                                return acc;
+                              }, {})
+                            ).map(([emoji, { count, mine, users }]) => (
+                              <button
+                                key={emoji}
+                                onClick={() => handleAddReaction(msg.id, emoji)}
+                                title={users.join(', ')}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition shadow-sm ${
+                                  mine
+                                    ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                                }`}
+                              >
+                                <span>{emoji}</span> <span className="text-[10px] font-medium">{count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Hover actions (Reply, Delete, React) */}
                         <AnimatePresence>
-                          {isMe && hoveredMsg === msg.id && onDeleteMessage && (
-                            <motion.button
+                          {hoveredMsg === msg.id && (
+                            <motion.div
                               initial={{ opacity: 0, scale: 0.8 }}
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0, scale: 0.8 }}
-                              onClick={() => onDeleteMessage(msg.id)}
-                              className="mt-1 flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 transition"
+                              className={`absolute top-2 flex items-center gap-1 bg-slate-800 shadow-md border border-slate-700 rounded-lg p-1 ${isMe ? '-left-24' : '-right-24'}`}
                             >
-                              <Trash2 className="w-3 h-3" />
-                              Delete
-                            </motion.button>
+                              <button onClick={() => setReactionPickerMsgId(msg.id)} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700 rounded-md transition" title="Add reaction">
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => setReplyTo(msg)} className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-700 rounded-md transition" title="Reply">
+                                <Reply className="w-3.5 h-3.5" />
+                              </button>
+                              {isMe && onDeleteMessage && (
+                                <button onClick={() => onDeleteMessage(msg.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-md transition" title="Delete">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Reaction Picker Overlay */}
+                        <AnimatePresence>
+                          {reactionPickerMsgId === msg.id && (
+                            <ReactionPicker
+                              align={isMe ? 'right' : 'left'}
+                              onSelect={(emoji) => handleAddReaction(msg.id, emoji)}
+                              onClose={() => setReactionPickerMsgId(null)}
+                            />
                           )}
                         </AnimatePresence>
                       </div>
@@ -340,8 +582,45 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             ))}
           </>
         )}
+        
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-2 px-4 pb-2">
+            <div className="flex gap-1 bg-slate-800 px-3 py-2 rounded-full border border-slate-700 shadow-sm">
+              {[0,1,2].map(i => (
+                <motion.div key={i} animate={{ y: [0, -4, 0] }} transition={{ delay: i * 0.15, repeat: Infinity, duration: 0.8 }}
+                  className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              ))}
+            </div>
+            <span className="text-xs text-slate-400">
+              {typingUsers.length === 1 ? `${typingUsers[0]} is typing...` : `${typingUsers.length} people are typing...`}
+            </span>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Reply preview bar */}
+      <AnimatePresence>
+        {replyTo && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-4 py-2 bg-slate-900/95 border-t border-slate-800 flex items-center gap-3 overflow-hidden shadow-[0_-4px_10px_rgba(0,0,0,0.2)] z-10"
+          >
+            <Reply className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+            <div className="flex-1 border-l-2 border-cyan-400 pl-3">
+              <p className="text-xs font-semibold text-cyan-400">{replyTo.sender?.display_name || 'User'}</p>
+              <p className="text-xs text-slate-400 truncate">{replyTo.content || (replyTo.voice_url ? '🎤 Voice message' : '📎 Attachment')}</p>
+            </div>
+            <button onClick={() => setReplyTo(null)} className="text-slate-400 hover:text-red-400 transition p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* File preview bar */}
       <AnimatePresence>
@@ -350,11 +629,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="px-4 py-2 bg-slate-900/80 border-t border-slate-800 flex items-center gap-3 overflow-hidden"
+            className="px-4 py-2 bg-slate-900/95 border-t border-slate-800 flex items-center gap-3 overflow-hidden z-10"
           >
             <FileText className="w-4 h-4 text-cyan-400 flex-shrink-0" />
             <span className="text-xs text-slate-300 truncate flex-1">{selectedFile.name}</span>
-            <button onClick={() => setSelectedFile(null)} className="text-slate-400 hover:text-red-400 transition">
+            <button onClick={() => setSelectedFile(null)} className="text-slate-400 hover:text-red-400 transition p-1">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -382,40 +661,60 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </AnimatePresence>
 
       {/* Input bar */}
-      <form onSubmit={handleSend} className="p-2 sm:p-3 bg-slate-900/95 border-t border-slate-800/80 flex items-end gap-1.5 sm:gap-2 backdrop-blur-md flex-shrink-0 relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
-        <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && setSelectedFile(e.target.files[0])} className="hidden" />
+      <div className="p-2 sm:p-3 bg-slate-900/95 border-t border-slate-800/80 flex items-end gap-1.5 sm:gap-2 backdrop-blur-md flex-shrink-0 relative pb-[max(0.625rem,env(safe-area-inset-bottom))] z-10">
+        {showVoiceRecorder ? (
+          <VoiceRecorder 
+            conversationId={conversation.id} 
+            onRecorded={handleVoiceRecorded} 
+            onCancel={() => setShowVoiceRecorder(false)} 
+          />
+        ) : (
+          <form onSubmit={handleSend} className="flex flex-1 items-end gap-1.5 sm:gap-2">
+            <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && setSelectedFile(e.target.files[0])} className="hidden" />
 
-        <button type="button" onClick={() => fileInputRef.current?.click()}
-          className="p-2 sm:p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0"
-          aria-label="Attach file">
-          <Paperclip className="w-5 h-5" />
-        </button>
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="p-2 sm:p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0"
+              title="Attach file">
+              <Paperclip className="w-5 h-5" />
+            </button>
 
-        <button type="button" onClick={() => setShowEmoji(p => !p)}
-          className="p-2.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0 hidden sm:block">
-          <Smile className="w-5 h-5" />
-        </button>
+            <button type="button" onClick={() => setShowEmoji(p => !p)}
+              className="p-2.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0 hidden sm:block" title="Emojis">
+              <Smile className="w-5 h-5" />
+            </button>
 
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={inputText}
-          onChange={(e) => { setInputText(e.target.value); autoResizeTextarea(); }}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send)"
-          disabled={isSending}
-          className="flex-1 py-2.5 px-4 bg-slate-800/80 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition resize-none min-h-[42px] max-h-[120px]"
-        />
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputText}
+              onChange={(e) => { setInputText(e.target.value); autoResizeTextarea(); }}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              disabled={isSending}
+              className="flex-1 py-2.5 px-4 bg-slate-800/80 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition resize-none min-h-[42px] max-h-[120px]"
+            />
 
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          type="submit"
-          disabled={isSending || (!inputText.trim() && !selectedFile)}
-          className="p-2.5 bg-gradient-to-tr from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 disabled:opacity-40 text-white rounded-xl shadow-lg shadow-blue-500/20 transition flex-shrink-0"
-        >
-          {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 -rotate-12 translate-x-0.5" />}
-        </motion.button>
-      </form>
+            {!inputText.trim() && !selectedFile ? (
+              <button
+                type="button"
+                onClick={() => setShowVoiceRecorder(true)}
+                className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0" title="Record Voice Message"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                type="submit"
+                disabled={isSending}
+                className="p-2.5 bg-gradient-to-tr from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 disabled:opacity-40 text-white rounded-xl shadow-lg shadow-blue-500/20 transition flex-shrink-0"
+              >
+                {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 -rotate-12 translate-x-0.5" />}
+              </motion.button>
+            )}
+          </form>
+        )}
+      </div>
     </div>
   );
 };

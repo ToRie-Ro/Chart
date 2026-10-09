@@ -279,7 +279,10 @@ export const ChatDashboard: React.FC = () => {
   // ─── Send message ──────────────────────────────────────────────────────────
   const handleSendMessage = async (
     content: string,
-    attachment?: { url: string; name: string; type: string; size: number }
+    attachment?: { url: string; name: string; type: string; size: number },
+    replyToId?: string,
+    voiceUrl?: string,
+    voiceDuration?: number
   ) => {
     if (!selectedConversationId || !user || !isConfigured) return;
 
@@ -289,6 +292,9 @@ export const ChatDashboard: React.FC = () => {
       conversation_id: selectedConversationId,
       sender_id: user.id,
       content: content || ' ',
+      reply_to_id: replyToId,
+      voice_url: voiceUrl,
+      voice_duration: voiceDuration,
       attachment_url: attachment?.url,
       attachment_name: attachment?.name,
       attachment_type: attachment?.type,
@@ -310,6 +316,12 @@ export const ChatDashboard: React.FC = () => {
       sender_id: user.id,
       content: content || ' ',
     };
+
+    if (replyToId) msgData.reply_to_id = replyToId;
+    if (voiceUrl) {
+      msgData.voice_url = voiceUrl;
+      msgData.voice_duration = voiceDuration;
+    }
 
     if (attachment) {
       msgData.attachment_url = attachment.url;

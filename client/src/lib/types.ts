@@ -23,15 +23,29 @@ export interface ConversationMember {
   profiles?: UserProfile;
 }
 
+export interface MessageReaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  profiles?: { display_name: string; };
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
   sender_id: string;
   content: string;
+  reply_to_id?: string | null;
+  reply_to?: { id: string; content: string; sender?: { display_name: string } } | null;
+  voice_url?: string | null;
+  voice_duration?: number | null;
   attachment_url?: string | null;
   attachment_name?: string | null;
   attachment_type?: string | null;
   attachment_size?: number | null;
+  reactions?: MessageReaction[];
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
