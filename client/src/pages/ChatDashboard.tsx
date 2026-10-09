@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, Settings, User as UserIcon, Waves, Loader2 } from 'lucide-react';
+import { LogOut, Settings, User as UserIcon, Waves, AlertCircle, X } from 'lucide-react';
 import { Conversation, Message, UserProfile } from '../lib/types';
 import { ChatList } from '../components/ChatList';
 import { ChatArea } from '../components/ChatArea';
@@ -21,7 +21,13 @@ export const ChatDashboard: React.FC = () => {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'error' | 'success' } | null>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const showToast = (msg: string, type: 'error' | 'success' = 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // ─── Load conversations from Supabase ─────────────────────────────────────
   const loadConversations = useCallback(async () => {
@@ -178,7 +184,7 @@ export const ChatDashboard: React.FC = () => {
     const msgData: Record<string, unknown> = {
       conversation_id: selectedConversationId,
       sender_id: user.id,
-      content,
+      content: content || ' ', // content column is NOT NULL — use space for attachment-only messages
     };
 
     if (attachment) {
@@ -234,11 +240,15 @@ export const ChatDashboard: React.FC = () => {
 
     const { data: newConv, error: convErr } = await supabase
       .from('conversations')
-      .insert({ is_group: false, created_by: user.id })
+      .insert({ is_group: false })
       .select()
       .single();
 
-    if (convErr || !newConv) { console.error('Failed to create conversation:', convErr); return; }
+    if (convErr || !newConv) {
+      console.error('Failed to create conversation:', convErr);
+      showToast('Failed to start chat. Please try again.');
+      return;
+    }
 
     await supabase.from('conversation_members').insert([
       { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
@@ -256,11 +266,15 @@ export const ChatDashboard: React.FC = () => {
 
     const { data: newConv, error: convErr } = await supabase
       .from('conversations')
-      .insert({ is_group: true, title: name, created_by: user.id })
+      .insert({ is_group: true, title: name })
       .select()
       .single();
 
-    if (convErr || !newConv) { console.error('Failed to create group:', convErr); return; }
+    if (convErr || !newConv) {
+      console.error('Failed to create group:', convErr);
+      showToast('Failed to create group channel. Please try again.');
+      return;
+    }
 
     const inserts = [
       { conversation_id: newConv.id, user_id: user.id, role: 'admin' },
@@ -281,7 +295,28 @@ export const ChatDashboard: React.FC = () => {
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId) ?? null;
 
   return (
-    <div className="h-screen flex bg-[#090e17] overflow-hidden">
+    <div className="h-screen flex bg-[#090e17] overflow-hidden relative">
+      {/* Toast notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl text-sm font-medium border max-w-sm w-full mx-4 ${
+              toast.type === 'error'
+                ? 'bg-red-950 border-red-500/40 text-red-300'
+                : 'bg-emerald-950 border-emerald-500/40 text-emerald-300'
+            }`}
+          >
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1">{toast.msg}</span>
+            <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100 transition">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Sidebar */}
       <motion.aside
         initial={{ x: -10, opacity: 0 }}
