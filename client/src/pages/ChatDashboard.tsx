@@ -78,7 +78,7 @@ export const ChatDashboard: React.FC = () => {
       if (allUserIds.length > 0) {
         const { data: profilesData } = await supabase
           .from('profiles')
-          .select('id, display_name, username, avatar_url, bio, status, last_seen')
+          .select('*')
           .in('id', allUserIds);
 
         if (profilesData) {
@@ -181,7 +181,7 @@ export const ChatDashboard: React.FC = () => {
       if (senderIds.length > 0) {
         const { data: senders } = await supabase
           .from('profiles')
-          .select('id, display_name, username, avatar_url, status')
+          .select('*')
           .in('id', senderIds);
         if (senders) {
           senderMap = new Map(senders.map((s) => [s.id, s]));
@@ -562,7 +562,7 @@ export const ChatDashboard: React.FC = () => {
   const selectedConversation = conversations.find((c) => c.id === selectedConversationId) ?? null;
 
   return (
-    <div className="h-screen flex bg-[#090e17] overflow-hidden relative">
+    <div className="h-[100dvh] flex bg-[#090e17] overflow-hidden relative">
       {/* Toast notification */}
       <AnimatePresence>
         {toast && (

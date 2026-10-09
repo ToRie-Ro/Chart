@@ -9,6 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
+import { resolveBannerUrl, setCachedBannerUrl } from '../lib/bannerHelper';
 import { format } from 'date-fns';
 
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'current';
@@ -34,6 +35,7 @@ export const ProfilePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [resolvedBanner, setResolvedBanner] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -42,27 +44,48 @@ export const ProfilePage: React.FC = () => {
       setDisplayName(myProfile.display_name || '');
       setUsernameInput(myProfile.username || '');
       setBio(myProfile.bio || '');
+
+      if (myProfile.banner_url) {
+        setResolvedBanner(myProfile.banner_url);
+      } else if (user?.id) {
+        resolveBannerUrl(user.id).then((bUrl) => {
+          if (bUrl) setResolvedBanner(bUrl);
+        });
+      }
     }
-  }, [isOwnProfile, myProfile]);
+  }, [isOwnProfile, myProfile, user?.id]);
 
   useEffect(() => {
     if (!isOwnProfile && paramId) {
       setLoadingOther(true);
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', paramId)
-        .single()
-        .then(({ data, error }) => {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', paramId)
+            .single();
+
           if (!error && data) {
             setOtherUser(data as UserProfile);
+            const bUrl = await resolveBannerUrl(paramId, (data as any).banner_url);
+            if (bUrl) setResolvedBanner(bUrl);
+          } else {
+            const bUrl = await resolveBannerUrl(paramId);
+            if (bUrl) setResolvedBanner(bUrl);
           }
+        } catch {
+          const bUrl = await resolveBannerUrl(paramId).catch(() => null);
+          if (bUrl) setResolvedBanner(bUrl);
+        } finally {
           setLoadingOther(false);
-        });
+        }
+      })();
     }
   }, [isOwnProfile, paramId]);
 
   const activeProfile = isOwnProfile ? myProfile : otherUser;
+  const currentBanner = resolvedBanner || activeProfile?.banner_url;
 
   // ─── Username Availability Check (Debounced) ───────────────────────────────
   const checkUsernameAvailability = useCallback(
@@ -191,6 +214,14 @@ export const ProfilePage: React.FC = () => {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
       const path = `banners/${user.id}.${ext}`;
+
+      // Clean up previous extensions to prevent conflicts
+      const otherExts = ['gif', 'png', 'jpg', 'jpeg', 'webp'].filter((x) => x !== ext);
+      await supabase.storage
+        .from('avatars')
+        .remove(otherExts.map((x) => `banners/${user.id}.${x}`))
+        .catch(() => {});
+
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(path, file, { upsert: true, contentType: file.type });
@@ -199,9 +230,18 @@ export const ProfilePage: React.FC = () => {
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(path);
       const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
-      await updateUserProfile({ banner_url: publicUrl });
+
+      // Update banner cache and local state immediately
+      setCachedBannerUrl(user.id, publicUrl);
+      setResolvedBanner(publicUrl);
+
+      const updateRes = await updateUserProfile({ banner_url: publicUrl });
+      if (updateRes && !updateRes.success) {
+        console.warn('Banner uploaded to storage, but database update notice:', updateRes.error);
+      }
     } catch (err: any) {
       console.error('Banner upload failed:', err);
+      alert('Banner upload failed: ' + (err.message || 'Unknown error'));
     } finally {
       setUploadingBanner(false);
     }
@@ -251,14 +291,14 @@ export const ProfilePage: React.FC = () => {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Profile Card Container with Banner & Avatar */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative mb-6">
           {/* ─── Animated Banner ─────────────────────────────────────────── */}
-          <div className="h-44 sm:h-52 w-full relative overflow-hidden bg-slate-950">
-            {activeProfile?.banner_url ? (
+          <div className="h-40 sm:h-52 w-full relative overflow-hidden bg-slate-950">
+            {currentBanner ? (
               <img
-                src={activeProfile.banner_url}
+                src={currentBanner}
                 alt="Banner"
                 className="w-full h-full object-cover"
               />
@@ -293,7 +333,7 @@ export const ProfilePage: React.FC = () => {
             {/* Banner Upload Button (Own profile) */}
             {isOwnProfile && (
               <label
-                className={`absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-xs font-semibold text-white cursor-pointer transition shadow-lg ${
+                className={`absolute top-3 right-3 flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-xs font-semibold text-white cursor-pointer transition shadow-lg ${
                   uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
@@ -302,7 +342,8 @@ export const ProfilePage: React.FC = () => {
                 ) : (
                   <Camera className="w-3.5 h-3.5" />
                 )}
-                <span>Change Banner (GIF/Image)</span>
+                <span className="hidden sm:inline">Change Banner (GIF/Image)</span>
+                <span className="sm:hidden">Banner</span>
                 <input
                   type="file"
                   accept="image/*,.gif"
@@ -315,13 +356,13 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           {/* ─── Avatar & User Overview ──────────────────────────────────── */}
-          <div className="px-6 pb-6 pt-0 relative">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-16 sm:-mt-20 mb-4 gap-4">
+          <div className="px-4 sm:px-6 pb-6 pt-0 relative">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-12 sm:-mt-20 mb-4 gap-4">
               {/* Avatar with optional GIF support */}
               <div className="relative inline-block">
                 <motion.div
                   whileHover={{ scale: 1.03 }}
-                  className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-900 shadow-2xl flex items-center justify-center relative group"
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-900 shadow-2xl flex items-center justify-center relative group"
                 >
                   {activeProfile?.avatar_url ? (
                     <img

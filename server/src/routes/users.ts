@@ -57,7 +57,7 @@ router.get('/search', async (req: Request, res: Response, next: NextFunction): P
 
     let queryBuilder = userClient
       .from('profiles')
-      .select('id, display_name, username, avatar_url, bio, status, last_seen')
+      .select('id, display_name, username, avatar_url, banner_url, bio, status, last_seen')
       .neq('id', currentUserId)
       .limit(20);
 
@@ -82,7 +82,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
 
     const { data: profile, error } = await userClient
       .from('profiles')
-      .select('id, display_name, username, avatar_url, bio, status, last_seen, created_at')
+      .select('*')
       .eq('id', targetUserId)
       .single();
 

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MessageSquare, Copy, Check, Calendar, Shield } from 'lucide-react';
 import { UserProfile } from '../lib/types';
+import { supabase } from '../lib/supabase';
+import { resolveBannerUrl } from '../lib/bannerHelper';
 import { format } from 'date-fns';
 
 interface UserProfileModalProps {
@@ -17,19 +19,59 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onClose,
   onStartChat,
 }) => {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
+  const [freshUser, setFreshUser] = useState<UserProfile | null>(null);
+  const [resolvedBanner, setResolvedBanner] = useState<string | null>(null);
 
-  if (!user) return null;
+  const activeUser = freshUser || user;
+
+  useEffect(() => {
+    if (!user?.id || !isOpen) {
+      setFreshUser(null);
+      setResolvedBanner(null);
+      return;
+    }
+
+    if (user.banner_url) {
+      setResolvedBanner(user.banner_url);
+    }
+
+    // Always fetch latest profile & resolve GIF/Image banner
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (data) {
+          setFreshUser(data as UserProfile);
+          const bUrl = await resolveBannerUrl(user.id, (data as any).banner_url);
+          if (bUrl) setResolvedBanner(bUrl);
+        } else {
+          const bUrl = await resolveBannerUrl(user.id, user.banner_url ?? undefined);
+          if (bUrl) setResolvedBanner(bUrl);
+        }
+      } catch {
+        const bUrl = await resolveBannerUrl(user.id, user.banner_url ?? undefined).catch(() => null);
+        if (bUrl) setResolvedBanner(bUrl);
+      }
+    })();
+  }, [user?.id, isOpen]);
+
+  if (!user || !activeUser) return null;
 
   const handleCopyUsername = () => {
-    if (user.username) {
-      navigator.clipboard.writeText(`@${user.username}`);
+    if (activeUser.username) {
+      navigator.clipboard.writeText(`@${activeUser.username}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const isOnline = user.status === 'online';
+  const isOnline = activeUser.status === 'online';
+  const bannerUrl = resolvedBanner || activeUser.banner_url;
 
   return (
     <AnimatePresence>
@@ -40,21 +82,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pointer-events-none"
           >
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden pointer-events-auto relative">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl w-[92vw] max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl overflow-hidden pointer-events-auto relative">
               {/* Top Banner (custom image, animated GIF, or dynamic animated gradient) */}
-              <div className="h-32 relative overflow-hidden flex items-start justify-end p-3">
-                {user.banner_url ? (
+              <div className="h-32 sm:h-36 relative overflow-hidden flex items-start justify-end p-3 bg-slate-950">
+                {bannerUrl ? (
                   <img
-                    src={user.banner_url}
+                    src={bannerUrl}
                     alt="Banner"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
@@ -88,15 +130,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       whileHover={{ scale: 1.05 }}
                       className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 ring-4 ring-slate-900 shadow-2xl flex items-center justify-center relative group cursor-pointer"
                     >
-                      {user.avatar_url ? (
+                      {activeUser.avatar_url ? (
                         <img
-                          src={user.avatar_url}
-                          alt={user.display_name}
+                          src={activeUser.avatar_url}
+                          alt={activeUser.display_name}
                           className="w-full h-full object-cover transition duration-300 group-hover:brightness-105"
                         />
                       ) : (
                         <span className="text-white font-extrabold text-3xl">
-                          {user.display_name?.charAt(0)?.toUpperCase() || '?'}
+                          {activeUser.display_name?.charAt(0)?.toUpperCase() || '?'}
                         </span>
                       )}
                     </motion.div>
@@ -120,9 +162,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
                 {/* User Name & Handle */}
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white tracking-tight">{user.display_name}</h3>
+                  <h3 className="text-xl font-bold text-white tracking-tight">{activeUser.display_name}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-sm text-cyan-400 font-medium">@{user.username || 'user'}</p>
+                    <p className="text-sm text-cyan-400 font-medium">@{activeUser.username || 'user'}</p>
                     <button
                       onClick={handleCopyUsername}
                       className="p-1 text-slate-400 hover:text-white rounded transition"
@@ -137,17 +179,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <div className="p-3.5 bg-slate-800/60 border border-slate-700/50 rounded-2xl mb-4">
                   <p className="text-xs text-slate-400 font-medium mb-1">About</p>
                   <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
-                    {user.bio || <span className="italic text-slate-500">No bio provided.</span>}
+                    {activeUser.bio || <span className="italic text-slate-500">No bio provided.</span>}
                   </p>
                 </div>
 
                 {/* Extra Details */}
                 <div className="space-y-2 mb-5 text-xs text-slate-400">
-                  {user.created_at && (
+                  {activeUser.created_at && (
                     <div className="flex items-center gap-2 text-slate-400">
                       <Calendar className="w-3.5 h-3.5 text-slate-500" />
                       <span>
-                        Joined {format(new Date(user.created_at), 'MMMM yyyy')}
+                        Joined {format(new Date(activeUser.created_at), 'MMMM yyyy')}
                       </span>
                     </div>
                   )}
@@ -163,7 +205,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       onClose();
-                      onStartChat(user);
+                      onStartChat(activeUser);
                     }}
                     className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2"
                   >

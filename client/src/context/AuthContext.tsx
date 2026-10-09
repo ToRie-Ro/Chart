@@ -155,13 +155,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', user.id)
         .select()
         .single();
-      if (error) return { success: false, error: error.message };
+
+      if (error) {
+        console.warn('Direct profile update note:', error.message);
+        // If error is about banner_url column not existing in DB, save metadata & retry other fields
+        if (error.message?.includes('banner_url')) {
+          if (data.banner_url) {
+            await supabase.auth.updateUser({ data: { banner_url: data.banner_url } }).catch(() => {});
+          }
+          const { banner_url, ...rest } = data;
+          if (Object.keys(rest).length > 0) {
+            await supabase
+              .from('profiles')
+              .update({ ...rest, updated_at: new Date().toISOString() })
+              .eq('id', user.id);
+          }
+        }
+        // Ensure local profile state has the updated fields immediately
+        setProfile((prev) => (prev ? { ...prev, ...data } : null));
+        return { success: false, error: error.message };
+      }
+
       if (updated) {
         setProfile(updated);
         return { success: true };
       }
       return { success: false, error: 'Failed to update profile' };
     } catch (err: any) {
+      setProfile((prev) => (prev ? { ...prev, ...data } : null));
       return { success: false, error: err.message || 'An error occurred' };
     }
   };

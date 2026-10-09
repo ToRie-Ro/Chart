@@ -125,14 +125,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-[#090e17] overflow-hidden">
       {/* Header */}
-      <div className="h-16 px-4 bg-slate-900/80 border-b border-slate-800/60 flex items-center justify-between backdrop-blur-md flex-shrink-0">
+      <div className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900/80 border-b border-slate-800/60 flex items-center justify-between backdrop-blur-md flex-shrink-0">
         <div
           onClick={() => {
             if (!conversation.is_group && otherMember && onViewProfile) {
               onViewProfile(otherMember);
             }
           }}
-          className={`flex items-center gap-3 ${!conversation.is_group ? 'cursor-pointer hover:opacity-85 transition group/header' : ''}`}
+          className={`flex items-center gap-2.5 sm:gap-3 ${!conversation.is_group ? 'cursor-pointer hover:opacity-85 transition group/header' : ''}`}
           title={!conversation.is_group ? `View ${chatTitle}'s profile` : undefined}
         >
           {onBackMobile && (
@@ -141,7 +141,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 e.stopPropagation();
                 onBackMobile();
               }}
-              className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+              className="md:hidden p-2 -ml-1 text-slate-300 hover:text-white rounded-xl active:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Back to conversations"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -381,11 +382,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </AnimatePresence>
 
       {/* Input bar */}
-      <form onSubmit={handleSend} className="p-3 bg-slate-900/95 border-t border-slate-800/80 flex items-end gap-2 backdrop-blur-md flex-shrink-0 relative">
+      <form onSubmit={handleSend} className="p-2 sm:p-3 bg-slate-900/95 border-t border-slate-800/80 flex items-end gap-1.5 sm:gap-2 backdrop-blur-md flex-shrink-0 relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
         <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && setSelectedFile(e.target.files[0])} className="hidden" />
 
         <button type="button" onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0">
+          className="p-2 sm:p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-xl transition flex-shrink-0"
+          aria-label="Attach file">
           <Paperclip className="w-5 h-5" />
         </button>
 

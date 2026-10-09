@@ -4,6 +4,8 @@ export const updateProfileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required').max(50, 'Display name too long').optional(),
   bio: z.string().max(250, 'Bio cannot exceed 250 characters').optional(),
   avatar_url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  banner_url: z.string().url('Must be a valid URL').optional().or(z.literal('')).nullable(),
+  username: z.string().min(3).max(20).optional(),
   status: z.enum(['online', 'away', 'busy', 'offline']).optional(),
 });
 
