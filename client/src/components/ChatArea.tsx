@@ -17,6 +17,7 @@ interface ChatAreaProps {
   messages: Message[];
   onSendMessage: (content: string, attachment?: { url: string; name: string; type: string; size: number }) => Promise<void>;
   onDeleteMessage?: (id: string) => Promise<void>;
+  onDeleteConversation?: (id: string) => Promise<void>;
   onBackMobile?: () => void;
   loading?: boolean;
 }
@@ -32,12 +33,13 @@ const Avatar: React.FC<{ name: string; url?: string | null; size?: number }> = (
 );
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
-  conversation, messages, onSendMessage, onDeleteMessage, onBackMobile, loading = false,
+  conversation, messages, onSendMessage, onDeleteMessage, onDeleteConversation, onBackMobile, loading = false,
 }) => {
   const { user, profile } = useAuth();
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,10 +146,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-slate-400">
+        <div className="flex items-center gap-1 text-slate-400 relative">
           <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Phone className="w-4 h-4" /></button>
           <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Video className="w-4 h-4" /></button>
-          <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><MoreVertical className="w-4 h-4" /></button>
+          <button onClick={() => setShowMenu((prev) => !prev)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition">
+            <MoreVertical className="w-4 h-4" />
+          </button>
+
+          <AnimatePresence>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  className="absolute right-0 top-11 z-30 w-48 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-1.5"
+                >
+                  {onDeleteConversation && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        onDeleteConversation(conversation.id);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete Conversation
+                    </button>
+                  )}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

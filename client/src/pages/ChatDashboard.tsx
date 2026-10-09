@@ -123,7 +123,29 @@ export const ChatDashboard: React.FC = () => {
         })
       );
 
-      setConversations(enriched);
+      // Deduplicate direct conversations by recipient user_id
+      // Keeps the most recent / active conversation and eliminates duplicates
+      const seenDirectRecipients = new Set<string>();
+      const deduplicated: Conversation[] = [];
+
+      for (const conv of enriched) {
+        if (conv.is_group) {
+          deduplicated.push(conv);
+        } else {
+          const otherMember = conv.members?.find((m) => m.user_id !== user.id);
+          const otherId = otherMember?.user_id;
+          if (otherId) {
+            if (!seenDirectRecipients.has(otherId)) {
+              seenDirectRecipients.add(otherId);
+              deduplicated.push(conv);
+            }
+          } else {
+            deduplicated.push(conv);
+          }
+        }
+      }
+
+      setConversations(deduplicated);
     } catch (err: any) {
       console.error('Failed to load conversations:', err);
       if (err?.message?.includes('recursion') || err?.code === '42P17') {
@@ -329,26 +351,51 @@ export const ChatDashboard: React.FC = () => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
+  // ─── Delete / Leave conversation ──────────────────────────────────────────
+  const handleDeleteConversation = async (convId: string) => {
+    if (!user || !isConfigured) return;
+    try {
+      await supabase
+        .from('conversation_members')
+        .delete()
+        .eq('conversation_id', convId)
+        .eq('user_id', user.id);
+
+      await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', convId);
+
+      setConversations((prev) => prev.filter((c) => c.id !== convId));
+      if (selectedConversationId === convId) {
+        setSelectedConversationId(null);
+        setMessages([]);
+      }
+      showToast('Conversation removed', 'success');
+    } catch (err: any) {
+      console.error('Delete conversation error:', err);
+      showToast(err.message || 'Failed to remove conversation');
+    }
+  };
+
   // ─── Start new DM with found user ─────────────────────────────────────────
   const handleStartChatWithUser = async (recipient: UserProfile) => {
     if (!user || !isConfigured) return;
     setShowNewChatModal(false);
 
     try {
-      // 1. Check if conversation already exists in memory or in DB
-      let existingConvId: string | null = null;
-
+      // 1. Check if conversation already exists in memory with this recipient
       const memExisting = conversations.find((conv) =>
         !conv.is_group &&
-        conv.members?.length === 2 &&
-        conv.members.some((m) => m.user_id === recipient.id) &&
-        conv.members.some((m) => m.user_id === user.id)
+        conv.members?.some((m) => m.user_id === recipient.id)
       );
 
       if (memExisting) {
         handleSelectConversation(memExisting.id);
         return;
       }
+
+      let existingConvId: string | null = null;
 
       // Check DB directly for shared direct conversations
       const { data: myConvs } = await supabase
@@ -611,6 +658,7 @@ export const ChatDashboard: React.FC = () => {
             selectedConversationId={selectedConversationId}
             onSelectConversation={handleSelectConversation}
             onOpenNewChat={() => setShowNewChatModal(true)}
+            onDeleteConversation={handleDeleteConversation}
             loading={loadingConversations}
           />
         </div>
@@ -623,6 +671,7 @@ export const ChatDashboard: React.FC = () => {
           messages={messages}
           onSendMessage={handleSendMessage}
           onDeleteMessage={handleDeleteMessage}
+          onDeleteConversation={handleDeleteConversation}
           onBackMobile={() => setShowMobileChat(false)}
           loading={loadingMessages}
         />

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Plus, Users, Clock, CheckCheck } from 'lucide-react';
+import { Search, Plus, Users, Trash2 } from 'lucide-react';
 import { Conversation } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -11,6 +10,7 @@ interface ChatListProps {
   selectedConversationId?: string | null;
   onSelectConversation: (id: string) => void;
   onOpenNewChat: () => void;
+  onDeleteConversation?: (id: string) => void;
   loading?: boolean;
 }
 
@@ -32,7 +32,7 @@ const Avatar: React.FC<{ name: string; url?: string | null; size?: number; onlin
 );
 
 export const ChatList: React.FC<ChatListProps> = ({
-  conversations, selectedConversationId, onSelectConversation, onOpenNewChat, loading = false,
+  conversations, selectedConversationId, onSelectConversation, onOpenNewChat, onDeleteConversation, loading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
@@ -124,7 +124,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.04 }}
                   onClick={() => onSelectConversation(conv.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-150 group ${
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-150 group relative ${
                     isSelected
                       ? 'bg-blue-600/20 border border-blue-500/30'
                       : 'hover:bg-slate-800/50 border border-transparent'
@@ -151,11 +151,25 @@ export const ChatList: React.FC<ChatListProps> = ({
                           <span className="italic text-slate-600">Say hello!</span>
                         )}
                       </p>
-                      {isUnread && (
-                        <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 text-[10px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center">
-                          {conv.unread_count}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isUnread && (
+                          <span className="min-w-[20px] h-5 px-1.5 text-[10px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center">
+                            {conv.unread_count}
+                          </span>
+                        )}
+                        {onDeleteConversation && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteConversation(conv.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-slate-500 rounded transition"
+                            title="Delete conversation"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
