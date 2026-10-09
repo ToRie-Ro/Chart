@@ -52,7 +52,7 @@ export const ContactsPage: React.FC = () => {
       display_name: 'Daniel Brown',
       username: 'danielb',
       avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      bio: 'Frontend developer @ Bluewave',
+      bio: 'Frontend developer @ Chart',
       status: 'away',
     },
   ];

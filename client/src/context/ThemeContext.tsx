@@ -12,7 +12,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem('bluewave-theme') as Theme;
+    const saved = (localStorage.getItem('chart-theme') || localStorage.getItem('bluewave-theme')) as Theme;
     return saved || 'dark'; // Default theme: dark mode
   });
 
@@ -25,7 +25,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.add('light');
       root.classList.remove('dark');
     }
-    localStorage.setItem('bluewave-theme', theme);
+    localStorage.setItem('chart-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {

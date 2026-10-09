@@ -153,7 +153,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   )}
                   <div className="flex items-center gap-2 text-slate-400">
                     <Shield className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Verified Bluewave Account</span>
+                    <span>Verified Chart Account</span>
                   </div>
                 </div>
 

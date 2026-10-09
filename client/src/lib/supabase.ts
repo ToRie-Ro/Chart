@@ -12,7 +12,7 @@ export const isSupabaseConfigured = Boolean(
 );
 
 export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://demo-bluewave.supabase.co',
+  isSupabaseConfigured ? supabaseUrl : 'https://demo-chart.supabase.co',
   isSupabaseConfigured ? supabaseAnonKey : 'demo-anon-key',
   {
     auth: {

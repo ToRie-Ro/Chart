@@ -68,7 +68,7 @@ const DMScreen: React.FC<{
           .from('profiles').select('*').ilike('username', `${prefix}%`)
           .neq('id', currentUserId || '').limit(1);
         if (d2 && d2.length > 0) setFound(d2[0]);
-        else setError('No user found. They must be registered on Bluewave Chat.');
+        else setError('No user found. They must be registered on Chart.');
       }
     } catch (e: any) { setError(e.message || 'Search failed.'); }
     finally { setSearching(false); }

@@ -232,8 +232,8 @@ export const ProfilePage: React.FC = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-400 flex items-center justify-center">
-              <Waves className="w-3.5 h-3.5 text-white" />
+            <div className="w-7 h-7 rounded-xl overflow-hidden flex items-center justify-center bg-blue-950/50">
+              <img src="/chart-logo.png" alt="Chart" className="w-full h-full object-contain" />
             </div>
             <span className="font-bold text-sm">
               {isOwnProfile ? 'Your Profile' : `${activeProfile?.display_name || 'User'}'s Profile`}
@@ -285,7 +285,7 @@ export const ProfilePage: React.FC = () => {
                 />
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-400/10 via-transparent to-transparent pointer-events-none" />
                 <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-[11px] font-medium text-cyan-300">
-                  <Sparkles className="w-3 h-3 text-cyan-400" /> Bluewave Animated Theme
+                  <Sparkles className="w-3 h-3 text-cyan-400" /> Chart Animated Theme
                 </div>
               </div>
             )}
@@ -386,7 +386,7 @@ export const ProfilePage: React.FC = () => {
             {/* Profile Titles */}
             <div className="mb-4">
               <h1 className="text-2xl font-extrabold text-white tracking-tight">
-                {activeProfile?.display_name || 'Bluewave User'}
+                {activeProfile?.display_name || 'Chart User'}
               </h1>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm font-semibold text-cyan-400">
@@ -585,7 +585,7 @@ export const ProfilePage: React.FC = () => {
 
               <div className="pt-2 flex items-center gap-2 text-xs text-slate-400">
                 <Shield className="w-4 h-4 text-emerald-400" />
-                <span>Verified Bluewave Chat Account</span>
+                <span>Verified Chart Account</span>
               </div>
             </motion.div>
           )}

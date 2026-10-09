@@ -56,7 +56,7 @@ app.use('/api', apiLimiter);
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
-    service: 'bluewave-chat-server',
+    service: 'chart-api-server',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
@@ -71,8 +71,8 @@ app.use('/api', messageRoutes);
 // Root route for sanity check
 app.get('/', (req: Request, res: Response) => {
   res.json({
-    name: 'Bluewave Chat API Server',
-    description: 'Production Node.js & Express backend for Bluewave Chat',
+    name: 'Chart API Server',
+    description: 'Production Node.js & Express backend for Chart',
     version: '1.0.0',
     status: 'online',
     health: '/health',
@@ -84,7 +84,7 @@ app.use(errorHandler);
 
 // Bind to 0.0.0.0 as required by Render
 const server = app.listen(PORT, HOST, () => {
-  console.log(`🚀 Bluewave Chat Server running at http://${HOST}:${PORT}`);
+  console.log(`🚀 Chart Server running at http://${HOST}:${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🩺 Health check ready at http://${HOST}:${PORT}/health`);
 });

@@ -1,7 +1,7 @@
 {
-  "name": "bluewave-chat-server",
+  "name": "chart-server",
   "version": "1.0.0",
-  "description": "Production-ready Node.js Express backend for Bluewave Chat deployed on Render",
+  "description": "Production-ready Node.js Express backend for Chart deployed on Render",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

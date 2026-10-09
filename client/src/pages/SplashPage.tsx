@@ -20,17 +20,15 @@ export const SplashPage: React.FC = () => {
       {/* Nav */}
       <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
         className="max-w-7xl mx-auto w-full px-6 py-6 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-700/30">
-            <span className="text-white font-extrabold text-base">B</span>
-          </div>
-          <span className="font-extrabold text-white tracking-tight text-lg">Bluewave</span>
+        <div className="flex items-center gap-3">
+          <img src="/chart-logo.png" alt="Chart" className="w-10 h-10 object-contain rounded-xl shadow-lg" />
+          <span className="font-extrabold text-white tracking-tight text-xl">Chart</span>
         </div>
         <div className="flex items-center gap-3">
           {user ? (
             <Link to="/app"
               className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-sm text-white shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
-              Open Bluewave <ArrowRight className="w-4 h-4" />
+              Open Chart <ArrowRight className="w-4 h-4" />
             </Link>
           ) : (
             <>
@@ -116,7 +114,7 @@ export const SplashPage: React.FC = () => {
       </main>
 
       <footer className="relative z-10 border-t border-slate-900 py-6 text-center text-xs text-slate-500">
-        © 2026 Bluewave Chat. All rights reserved. Deployed on Render · Powered by Supabase.
+        © 2026 Chart. All rights reserved. Deployed on Render · Powered by Supabase.
       </footer>
     </div>
   );

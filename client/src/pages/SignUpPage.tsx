@@ -57,11 +57,11 @@ export const SignUpPage: React.FC = () => {
         className="w-full max-w-md relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 via-blue-600 to-cyan-400 shadow-lg shadow-blue-500/30 mb-4">
-            <Waves className="w-7 h-7 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl overflow-hidden shadow-xl shadow-blue-500/20 mb-4 bg-slate-900 border border-slate-800">
+            <img src="/chart-logo.png" alt="Chart" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white">Create your account</h1>
-          <p className="text-slate-400 text-sm mt-1">Join Bluewave Chat today</p>
+          <p className="text-slate-400 text-sm mt-1">Join Chart today</p>
         </div>
 
         <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">

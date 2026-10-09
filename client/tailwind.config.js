@@ -32,6 +32,16 @@ export default {
           bubble: '#182438',
           'bubble-sent': '#2563eb',
         },
+        chart: {
+          navy: '#090e17',
+          'navy-light': '#0f172a',
+          'navy-card': '#111c30',
+          'navy-hover': '#16233d',
+          electric: '#2563eb',
+          'electric-bright': '#3b82f6',
+          cyan: '#06b6d4',
+          'cyan-bright': '#22d3ee',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],

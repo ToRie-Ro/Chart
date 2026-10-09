@@ -595,10 +595,10 @@ export const ChatDashboard: React.FC = () => {
         {/* App header in sidebar */}
         <div className="h-16 px-4 bg-slate-950/80 border-b border-slate-800/60 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-400 flex items-center justify-center shadow-lg">
-              <Waves className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg border border-slate-800 bg-slate-900 flex items-center justify-center">
+              <img src="/chart-logo.png" alt="Chart" className="w-full h-full object-contain" />
             </div>
-            <span className="font-bold text-white text-sm tracking-tight">Bluewave</span>
+            <span className="font-bold text-white text-base tracking-tight">Chart</span>
           </div>
 
           {/* Profile menu */}
