@@ -4,6 +4,7 @@ import { Search, Plus, Users, Trash2 } from 'lucide-react';
 import { Conversation } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
 import { format, isToday, isYesterday } from 'date-fns';
+import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -113,7 +114,7 @@ export const ChatList: React.FC<ChatListProps> = ({
               const otherMember = conv.members?.find((m) => m.user_id !== user?.id)?.profiles;
               const chatName = conv.is_group ? (conv.title || 'Group Chat') : (otherMember?.display_name || 'Unknown');
               const avatarUrl = conv.is_group ? null : otherMember?.avatar_url;
-              const isOnline = otherMember?.status === 'online';
+              const isOnline = isUserOnline(otherMember);
               const lastMsg = conv.last_message;
               const isUnread = (conv.unread_count || 0) > 0;
 
@@ -148,7 +149,9 @@ export const ChatList: React.FC<ChatListProps> = ({
                             ? `📎 ${lastMsg.attachment_name}`
                             : lastMsg.content
                         ) : (
-                          <span className="italic text-slate-600">Say hello!</span>
+                          <span className="text-slate-500 text-[11px]">
+                            {conv.is_group ? 'Say hello!' : formatUserStatus(otherMember, { withDot: false })}
+                          </span>
                         )}
                       </p>
                       <div className="flex items-center gap-1.5 flex-shrink-0">

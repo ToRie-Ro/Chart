@@ -74,6 +74,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
+  // ─── Live Presence Heartbeat & Offline Detection ───────────────────────────
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) return;
+
+    let isDisposed = false;
+
+    // Helper to update online status & last_seen timestamp in database
+    const updatePresence = async (status: 'online' | 'offline') => {
+      if (isDisposed) return;
+      const nowIso = new Date().toISOString();
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            status,
+            last_seen: nowIso,
+            updated_at: nowIso,
+          })
+          .eq('id', user.id);
+
+        setProfile((prev) => (prev ? { ...prev, status, last_seen: nowIso } : null));
+      } catch {
+        // Silently ignore transient network errors for presence
+      }
+    };
+
+    // 1. Immediately mark user as online when active
+    updatePresence('online');
+
+    // 2. Heartbeat every 1 minute (60s) to keep status fresh
+    const heartbeatInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        updatePresence('online');
+      }
+    }, 60000);
+
+    // 3. Detect when user switches away, minimizes, or leaves the browser/app
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        updatePresence('offline');
+      } else if (document.visibilityState === 'visible') {
+        updatePresence('online');
+      }
+    };
+
+    // 4. Detect when user closes the tab / window or navigates away
+    const handleBeforeUnload = () => {
+      const nowIso = new Date().toISOString();
+      try {
+        void supabase
+          .from('profiles')
+          .update({
+            status: 'offline',
+            last_seen: nowIso,
+            updated_at: nowIso,
+          })
+          .eq('id', user.id);
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+
+    return () => {
+      isDisposed = true;
+      clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
+  }, [user?.id]);
+
   const signUp = async (email: string, password: string, fullName: string) => {
     if (!isSupabaseConfigured) {
       return { success: false, error: 'Please add your Supabase credentials (VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY) to the Render environment variables, then redeploy the frontend.' };
@@ -115,7 +190,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (isSupabaseConfigured) await supabase.auth.signOut();
+    if (isSupabaseConfigured && user) {
+      const nowIso = new Date().toISOString();
+      try {
+        await supabase
+          .from('profiles')
+          .update({ status: 'offline', last_seen: nowIso, updated_at: nowIso })
+          .eq('id', user.id);
+      } catch {
+        // ignore
+      }
+      await supabase.auth.signOut();
+    } else if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
     setUser(null);
     setProfile(null);
     setSession(null);

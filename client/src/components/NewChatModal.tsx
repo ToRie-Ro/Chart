@@ -7,6 +7,7 @@ import {
 import { UserProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen = 'choice' | 'dm' | 'group';
@@ -111,14 +112,14 @@ const DMScreen: React.FC<{
                   ? <img src={found.avatar_url} alt={found.display_name} className="w-full h-full object-cover" />
                   : <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">{found.display_name?.charAt(0)?.toUpperCase()}</div>
                 }
-                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-slate-800 ${found.status === 'online' ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-slate-800 ${isUserOnline(found) ? 'bg-emerald-500' : 'bg-slate-500'}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-white text-sm truncate">{found.display_name}</p>
                 <p className="text-xs text-slate-400 truncate">@{found.username}</p>
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${found.status === 'online' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-                {found.status || 'offline'}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isUserOnline(found) ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                {formatUserStatus(found, { withDot: false })}
               </span>
             </div>
             <motion.button whileTap={{ scale: 0.97 }} onClick={() => onSelectUser(found)}

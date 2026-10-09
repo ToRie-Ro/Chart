@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 import { resolveBannerUrl, setCachedBannerUrl } from '../lib/bannerHelper';
 import { format } from 'date-fns';
+import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
 
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'current';
 
@@ -405,12 +406,12 @@ export const ProfilePage: React.FC = () => {
               <div className="flex items-center gap-2 self-start sm:self-auto sm:mb-2">
                 <span
                   className={`px-3 py-1 text-xs font-semibold rounded-full border ${
-                    activeProfile?.status === 'online'
+                    isUserOnline(activeProfile)
                       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
-                  {activeProfile?.status === 'online' ? '🟢 Online' : 'Offline'}
+                  {formatUserStatus(activeProfile)}
                 </span>
 
                 {!isOwnProfile && otherUser && (

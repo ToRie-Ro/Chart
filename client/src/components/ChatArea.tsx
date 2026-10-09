@@ -11,6 +11,7 @@ import { format, isToday } from 'date-fns';
 import { VoiceRecorder } from './VoiceRecorder';
 import { MessageSearch } from './MessageSearch';
 import { ReactionPicker } from './ReactionPicker';
+import { useLiveStatus } from '../lib/statusHelper';
 
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '😊', '🎉', '👋', '😂', '💯', '🙏'];
 
@@ -229,7 +230,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const otherMember = conversation.members?.find((m) => m.user_id !== user?.id)?.profiles;
   const chatTitle = conversation.is_group ? (conversation.title || 'Group Chat') : (otherMember?.display_name || 'Unknown');
   const avatarUrl = conversation.is_group ? null : otherMember?.avatar_url;
-  const isOnline = otherMember?.status === 'online';
+  const { isOnline, statusText } = useLiveStatus(otherMember);
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -329,7 +330,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <p className="text-xs text-slate-400">
               {conversation.is_group
                 ? `${conversation.members?.length || 0} members`
-                : isOnline ? '🟢 Online' : 'Offline'}
+                : statusText}
             </p>
           </div>
         </div>

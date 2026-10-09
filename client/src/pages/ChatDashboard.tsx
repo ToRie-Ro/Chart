@@ -268,6 +268,52 @@ export const ChatDashboard: React.FC = () => {
     };
   }, [selectedConversationId, isConfigured, loadConversations]);
 
+  // ─── Realtime profiles & status sync (updates live whenever contacts go online/offline) ───
+  useEffect(() => {
+    if (!user || !isConfigured) return;
+
+    const profilesChannel = supabase
+      .channel('public:profiles_status_sync')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+      }, (payload) => {
+        const updated = payload.new as UserProfile;
+        setConversations((prev) =>
+          prev.map((conv) => ({
+            ...conv,
+            members: conv.members.map((m) =>
+              m.user_id === updated.id
+                ? { ...m, profiles: { ...m.profiles, ...updated } }
+                : m
+            ),
+          }))
+        );
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.sender_id === updated.id
+              ? { ...msg, sender: { ...msg.sender, ...updated } }
+              : msg
+          )
+        );
+
+        setViewingProfileUser((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+      })
+      .subscribe();
+
+    // Re-check conversations and status timestamps every 60s
+    const refreshInterval = setInterval(() => {
+      loadConversations();
+    }, 60000);
+
+    return () => {
+      supabase.removeChannel(profilesChannel);
+      clearInterval(refreshInterval);
+    };
+  }, [user?.id, isConfigured, loadConversations, viewingProfileUser?.id]);
+
   // ─── Select conversation ───────────────────────────────────────────────────
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);

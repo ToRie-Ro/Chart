@@ -5,6 +5,7 @@ import { UserProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { resolveBannerUrl } from '../lib/bannerHelper';
 import { format } from 'date-fns';
+import { useLiveStatus } from '../lib/statusHelper';
 
 interface UserProfileModalProps {
   user: UserProfile | null;
@@ -70,7 +71,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
-  const isOnline = activeUser.status === 'online';
+  const { isOnline, statusText } = useLiveStatus(activeUser);
   const bannerUrl = resolvedBanner || activeUser.banner_url;
 
   return (
@@ -156,7 +157,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         : 'bg-slate-800 text-slate-400 border-slate-700'
                     }`}
                   >
-                    {isOnline ? '🟢 Online' : 'Offline'}
+                    {statusText}
                   </span>
                 </div>
 

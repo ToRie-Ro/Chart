@@ -6,6 +6,7 @@ import { Search, MessageSquare, UserPlus, Users, Loader2 } from 'lucide-react';
 import { UserProfile } from '../lib/types';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
 
 export const ContactsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -147,15 +148,20 @@ export const ContactsPage: React.FC = () => {
                       )}
                       <span
                         className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-slate-900 ${
-                          contact.status === 'online' ? 'bg-emerald-500' : 'bg-slate-500'
+                          isUserOnline(contact) ? 'bg-emerald-500' : 'bg-slate-500'
                         }`}
                       />
                     </div>
 
                     <div className="truncate">
-                      <h3 className="text-sm font-bold text-white truncate hover:text-cyan-400 transition">
-                        {contact.display_name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-white truncate hover:text-cyan-400 transition">
+                          {contact.display_name}
+                        </h3>
+                        <span className="text-[10px] text-slate-400 flex-shrink-0">
+                          {formatUserStatus(contact, { withDot: false })}
+                        </span>
+                      </div>
                       <p className="text-xs text-slate-400 truncate">@{contact.username}</p>
                       {contact.bio && (
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">{contact.bio}</p>
