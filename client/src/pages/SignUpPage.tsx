@@ -39,7 +39,11 @@ export const SignUpPage: React.FC = () => {
     try {
       const res = await signUp(email, password, fullName);
       if (res.success) {
-        navigate(`/verify?email=${encodeURIComponent(email)}`);
+        if (res.isFallback) {
+          navigate('/app');
+        } else {
+          navigate(`/verify?email=${encodeURIComponent(email)}`);
+        }
       } else {
         setError(res.error || 'Failed to create account.');
       }
