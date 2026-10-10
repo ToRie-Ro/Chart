@@ -9,6 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
+import { api } from '../lib/api';
 import { resolveBannerUrl, setCachedBannerUrl } from '../lib/bannerHelper';
 import { format } from 'date-fns';
 import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
@@ -61,6 +62,7 @@ export const ProfilePage: React.FC = () => {
       setLoadingOther(true);
       (async () => {
         try {
+          let fetchedUser: UserProfile | null = null;
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -68,8 +70,19 @@ export const ProfilePage: React.FC = () => {
             .single();
 
           if (!error && data) {
-            setOtherUser(data as UserProfile);
-            const bUrl = await resolveBannerUrl(paramId, (data as any).banner_url);
+            fetchedUser = data as UserProfile;
+          } else {
+            // Fallback to backend API
+            try {
+              fetchedUser = await api.getUserProfile(paramId);
+            } catch {
+              // Ignore fallback error
+            }
+          }
+
+          if (fetchedUser) {
+            setOtherUser(fetchedUser);
+            const bUrl = await resolveBannerUrl(paramId, fetchedUser.banner_url || undefined);
             if (bUrl) setResolvedBanner(bUrl);
           } else {
             const bUrl = await resolveBannerUrl(paramId);

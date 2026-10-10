@@ -25,6 +25,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [resolvedBanner, setResolvedBanner] = useState<string | null>(null);
 
   const activeUser = freshUser || user;
+  const { isOnline, statusText } = useLiveStatus(activeUser);
+  const bannerUrl = resolvedBanner || activeUser?.banner_url;
 
   useEffect(() => {
     if (!user?.id || !isOpen) {
@@ -61,18 +63,15 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     })();
   }, [user?.id, isOpen]);
 
-  if (!user || !activeUser) return null;
-
   const handleCopyUsername = () => {
-    if (activeUser.username) {
+    if (activeUser?.username) {
       navigator.clipboard.writeText(`@${activeUser.username}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const { isOnline, statusText } = useLiveStatus(activeUser);
-  const bannerUrl = resolvedBanner || activeUser.banner_url;
+  if (!isOpen || !activeUser) return null;
 
   return (
     <AnimatePresence>
