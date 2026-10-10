@@ -38,7 +38,16 @@ export interface Message {
   sender_id: string;
   content: string;
   reply_to_id?: string | null;
-  reply_to?: { id: string; content: string; sender?: { display_name: string } } | null;
+  reply_to?: {
+    id: string;
+    content?: string | null;
+    attachment_url?: string | null;
+    attachment_name?: string | null;
+    attachment_type?: string | null;
+    voice_url?: string | null;
+    voice_duration?: number | null;
+    sender?: { display_name?: string; username?: string };
+  } | null;
   voice_url?: string | null;
   voice_duration?: number | null;
   attachment_url?: string | null;

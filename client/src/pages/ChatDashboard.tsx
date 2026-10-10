@@ -203,14 +203,58 @@ export const ChatDashboard: React.FC = () => {
         }
       }
 
-      const enriched = (rawMessages || []).map((m) => ({
-        ...m,
-        sender: senderMap.get(m.sender_id) || {
-          id: m.sender_id,
-          display_name: 'User',
-          username: 'user',
-        },
-      }));
+      // Build map of messages for resolving reply_to
+      const rawMsgMap = new Map<string, any>((rawMessages || []).map((m) => [m.id, m]));
+      const missingReplyIds = Array.from(
+        new Set(
+          (rawMessages || [])
+            .map((m) => m.reply_to_id)
+            .filter((id): id is string => Boolean(id) && !rawMsgMap.has(id))
+        )
+      );
+
+      if (missingReplyIds.length > 0) {
+        const { data: missingReplies } = await supabase
+          .from('messages')
+          .select('id, content, sender_id, attachment_url, attachment_name, attachment_type, voice_url, voice_duration')
+          .in('id', missingReplyIds);
+        if (missingReplies) {
+          missingReplies.forEach((r) => rawMsgMap.set(r.id, r));
+        }
+      }
+
+      const enriched = (rawMessages || []).map((m) => {
+        let replyObj = m.reply_to;
+        if (m.reply_to_id && !replyObj) {
+          const parent = rawMsgMap.get(m.reply_to_id);
+          if (parent) {
+            const parentSender = senderMap.get(parent.sender_id);
+            replyObj = {
+              id: parent.id,
+              content: parent.content,
+              attachment_url: parent.attachment_url,
+              attachment_name: parent.attachment_name,
+              attachment_type: parent.attachment_type,
+              voice_url: parent.voice_url,
+              voice_duration: parent.voice_duration,
+              sender: {
+                display_name: parentSender?.display_name || 'User',
+                username: parentSender?.username || 'user',
+              },
+            };
+          }
+        }
+
+        return {
+          ...m,
+          reply_to: replyObj,
+          sender: senderMap.get(m.sender_id) || {
+            id: m.sender_id,
+            display_name: 'User',
+            username: 'user',
+          },
+        };
+      });
 
       setMessages(enriched as Message[]);
     } catch (err: any) {
@@ -252,13 +296,50 @@ export const ChatDashboard: React.FC = () => {
             .eq('id', rawMsg.sender_id)
             .maybeSingle();
 
+          let replyObj = rawMsg.reply_to;
+          if (rawMsg.reply_to_id && !replyObj) {
+            const { data: parentMsg } = await supabase
+              .from('messages')
+              .select('id, content, sender_id, attachment_url, attachment_name, attachment_type, voice_url, voice_duration')
+              .eq('id', rawMsg.reply_to_id)
+              .maybeSingle();
+
+            if (parentMsg) {
+              const { data: parentSender } = await supabase
+                .from('profiles')
+                .select('display_name, username')
+                .eq('id', parentMsg.sender_id)
+                .maybeSingle();
+
+              replyObj = {
+                id: parentMsg.id,
+                content: parentMsg.content,
+                attachment_url: parentMsg.attachment_url,
+                attachment_name: parentMsg.attachment_name,
+                attachment_type: parentMsg.attachment_type,
+                voice_url: parentMsg.voice_url,
+                voice_duration: parentMsg.voice_duration,
+                sender: {
+                  display_name: parentSender?.display_name || 'User',
+                  username: parentSender?.username || 'user',
+                },
+              };
+            }
+          }
+
           const enriched = {
             ...rawMsg,
+            reply_to: replyObj,
             sender: senderProfile || undefined,
           };
 
           setMessages((prev) => {
-            if (prev.find((m) => m.id === enriched.id)) return prev;
+            const existingIndex = prev.findIndex((m) => m.id === enriched.id);
+            if (existingIndex !== -1) {
+              const updated = [...prev];
+              updated[existingIndex] = { ...updated[existingIndex], ...enriched };
+              return updated;
+            }
             return [...prev, enriched];
           });
         }
@@ -361,12 +442,33 @@ export const ChatDashboard: React.FC = () => {
     if (!selectedConversationId || !user || !isConfigured) return;
 
     const optimisticId = crypto.randomUUID();
+    let replyPreviewObj = undefined;
+    if (replyToId) {
+      const parent = messages.find((m) => m.id === replyToId);
+      if (parent) {
+        replyPreviewObj = {
+          id: parent.id,
+          content: parent.content,
+          attachment_url: parent.attachment_url,
+          attachment_name: parent.attachment_name,
+          attachment_type: parent.attachment_type,
+          voice_url: parent.voice_url,
+          voice_duration: parent.voice_duration,
+          sender: {
+            display_name: parent.sender?.display_name || 'User',
+            username: parent.sender?.username || 'user',
+          },
+        };
+      }
+    }
+
     const optimisticMsg: Message = {
       id: optimisticId,
       conversation_id: selectedConversationId,
       sender_id: user.id,
       content: content || ' ',
       reply_to_id: replyToId,
+      reply_to: replyPreviewObj,
       voice_url: voiceUrl,
       voice_duration: voiceDuration,
       attachment_url: attachment?.url,
@@ -412,7 +514,11 @@ export const ChatDashboard: React.FC = () => {
 
     if (!error && data) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticId ? { ...data, sender: optimisticMsg.sender } : m))
+        prev.map((m) =>
+          m.id === optimisticId
+            ? { ...data, sender: optimisticMsg.sender, reply_to: optimisticMsg.reply_to }
+            : m
+        )
       );
       await supabase
         .from('conversations')

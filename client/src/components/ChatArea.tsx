@@ -179,7 +179,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setReactionPickerMsgId(null);
   };
 
-  // Typing
   const handleTyping = () => {
     if (typingChannelRef.current) {
       typingChannelRef.current.track({ user_id: user?.id, display_name: profile?.display_name });
@@ -187,7 +186,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       typingChannelRef.current?.untrack();
-    }, 2500);
+    }, 2000);
+  };
+
+  const handleStopTyping = () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingChannelRef.current?.untrack();
   };
 
   useEffect(() => {
@@ -259,6 +263,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           attachment = { url: data.publicUrl, name: selectedFile.name, type: selectedFile.type, size: selectedFile.size };
         }
       }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingChannelRef.current?.untrack();
       await onSendMessage(inputText.trim(), attachment, replyTo?.id);
       setInputText('');
       setSelectedFile(null);
@@ -271,6 +277,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleVoiceRecorded = async (url: string, duration: number) => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingChannelRef.current?.untrack();
     setShowVoiceRecorder(false);
     await onSendMessage('', undefined, replyTo?.id, url, duration);
     setReplyTo(null);
@@ -489,10 +497,35 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           
                           {/* Replied-to preview */}
                           {msg.reply_to && (
-                            <div className="mb-2 pl-3 py-1 border-l-2 border-white/30 bg-black/10 rounded-r-md opacity-90 cursor-pointer"
+                            <div className="mb-2 pl-2.5 pr-2 py-1.5 border-l-2 border-cyan-400 bg-black/20 hover:bg-black/30 rounded-r-xl opacity-95 cursor-pointer transition flex items-center justify-between gap-2 max-w-full overflow-hidden"
                                  onClick={() => scrollToMessage(msg.reply_to!.id)}>
-                              <p className="text-[10px] font-bold text-white/90">{msg.reply_to.sender?.display_name || 'User'}</p>
-                              <p className="text-xs truncate text-white/80">{msg.reply_to.content || '🎤 Voice message'}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-bold text-cyan-300 truncate">{msg.reply_to.sender?.display_name || 'User'}</p>
+                                <div className="flex items-center gap-1.5 text-xs text-white/80 truncate">
+                                  {msg.reply_to.attachment_url && isImageType(msg.reply_to.attachment_type, msg.reply_to.attachment_name) && (
+                                    <span className="text-[11px] text-cyan-300 font-medium flex items-center gap-1">📷 Photo</span>
+                                  )}
+                                  {msg.reply_to.attachment_url && isVideoType(msg.reply_to.attachment_type, msg.reply_to.attachment_name) && (
+                                    <span className="text-[11px] text-purple-300 font-medium flex items-center gap-1">🎥 Video</span>
+                                  )}
+                                  {msg.reply_to.voice_url && (
+                                    <span className="text-[11px] text-emerald-300 font-medium flex items-center gap-1">🎤 Voice ({msg.reply_to.voice_duration ? `${msg.reply_to.voice_duration}s` : 'audio'})</span>
+                                  )}
+                                  {msg.reply_to.attachment_url && !isImageType(msg.reply_to.attachment_type, msg.reply_to.attachment_name) && !isVideoType(msg.reply_to.attachment_type, msg.reply_to.attachment_name) && (
+                                    <span className="text-[11px] text-amber-300 font-medium flex items-center gap-1">📎 {msg.reply_to.attachment_name || 'File'}</span>
+                                  )}
+                                  {msg.reply_to.content && (
+                                    <span className="truncate">{msg.reply_to.content}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {msg.reply_to.attachment_url && isImageType(msg.reply_to.attachment_type, msg.reply_to.attachment_name) && (
+                                <img
+                                  src={msg.reply_to.attachment_url}
+                                  alt="preview"
+                                  className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-white/20"
+                                />
+                              )}
                             </div>
                           )}
 
@@ -672,11 +705,30 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             className="px-4 py-2 bg-slate-900/95 border-t border-slate-800 flex items-center gap-3 overflow-hidden shadow-[0_-4px_10px_rgba(0,0,0,0.2)] z-10"
           >
             <Reply className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-            <div className="flex-1 border-l-2 border-cyan-400 pl-3">
+            <div className="flex-1 min-w-0 border-l-2 border-cyan-400 pl-3">
               <p className="text-xs font-semibold text-cyan-400">{replyTo.sender?.display_name || 'User'}</p>
-              <p className="text-xs text-slate-400 truncate">{replyTo.content || (replyTo.voice_url ? '🎤 Voice message' : '📎 Attachment')}</p>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
+                {replyTo.attachment_url && isImageType(replyTo.attachment_type, replyTo.attachment_name) && (
+                  <span className="text-[11px] text-cyan-300 font-medium">📷 Photo</span>
+                )}
+                {replyTo.attachment_url && isVideoType(replyTo.attachment_type, replyTo.attachment_name) && (
+                  <span className="text-[11px] text-purple-300 font-medium">🎥 Video</span>
+                )}
+                {replyTo.voice_url && (
+                  <span className="text-[11px] text-emerald-300 font-medium">🎤 Voice message ({replyTo.voice_duration ? `${replyTo.voice_duration}s` : 'audio'})</span>
+                )}
+                {replyTo.attachment_url && !isImageType(replyTo.attachment_type, replyTo.attachment_name) && !isVideoType(replyTo.attachment_type, replyTo.attachment_name) && (
+                  <span className="text-[11px] text-amber-300 font-medium">📎 {replyTo.attachment_name || 'Attachment'}</span>
+                )}
+                {replyTo.content && (
+                  <span className="truncate">{replyTo.content}</span>
+                )}
+              </div>
             </div>
-            <button onClick={() => setReplyTo(null)} className="text-slate-400 hover:text-red-400 transition p-1">
+            {replyTo.attachment_url && isImageType(replyTo.attachment_type, replyTo.attachment_name) && (
+              <img src={replyTo.attachment_url} alt="preview" className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-slate-700" />
+            )}
+            <button onClick={() => setReplyTo(null)} className="text-slate-400 hover:text-red-400 transition p-1 flex-shrink-0">
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -778,7 +830,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               ref={textareaRef}
               rows={1}
               value={inputText}
-              onChange={(e) => { setInputText(e.target.value); autoResizeTextarea(); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInputText(val);
+                autoResizeTextarea();
+                if (val.trim()) {
+                  handleTyping();
+                } else {
+                  handleStopTyping();
+                }
+              }}
+              onBlur={handleStopTyping}
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               disabled={isSending}
