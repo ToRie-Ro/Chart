@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Settings, User as UserIcon, Waves, AlertCircle, X } from 'lucide-react';
 import { Conversation, Message, UserProfile } from '../lib/types';
@@ -9,14 +9,17 @@ import { NewChatModal } from '../components/NewChatModal';
 import { UserProfileModal } from '../components/UserProfileModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 
 export const ChatDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, signOut, isConfigured } = useAuth();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -147,7 +150,18 @@ export const ChatDashboard: React.FC = () => {
         }
       }
 
-      setConversations(deduplicated);
+      setConversations((prev) => {
+        if (selectedConversationId) {
+          const hasSelected = deduplicated.some((c) => c.id === selectedConversationId);
+          if (!hasSelected) {
+            const preserved = activeConversation || prev.find((c) => c.id === selectedConversationId);
+            if (preserved) {
+              return [preserved, ...deduplicated.filter((c) => c.id !== preserved.id)];
+            }
+          }
+        }
+        return deduplicated;
+      });
     } catch (err: any) {
       console.error('Failed to load conversations:', err);
       if (err?.message?.includes('recursion') || err?.code === '42P17') {
@@ -156,7 +170,7 @@ export const ChatDashboard: React.FC = () => {
     } finally {
       setLoadingConversations(false);
     }
-  }, [user, isConfigured]);
+  }, [user, isConfigured, selectedConversationId, activeConversation]);
 
   useEffect(() => {
     loadConversations();
@@ -314,9 +328,22 @@ export const ChatDashboard: React.FC = () => {
     };
   }, [user?.id, isConfigured, loadConversations, viewingProfileUser?.id]);
 
+  // ─── Auto-open chat if navigated with location.state.startChatWith ─────────
+  useEffect(() => {
+    const target = (location.state as any)?.startChatWith as UserProfile | undefined;
+    if (target) {
+      handleStartChatWithUser(target);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   // ─── Select conversation ───────────────────────────────────────────────────
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
+    const target = conversations.find((c) => c.id === id) || (activeConversation?.id === id ? activeConversation : null);
+    if (target) {
+      setActiveConversation(target);
+    }
     setMessages([]);
     setShowMobileChat(true);
     loadMessages(id);
@@ -451,76 +478,16 @@ export const ChatDashboard: React.FC = () => {
       );
 
       if (memExisting) {
-        handleSelectConversation(memExisting.id);
+        setActiveConversation(memExisting);
+        setSelectedConversationId(memExisting.id);
+        setMessages([]);
+        setShowMobileChat(true);
+        loadMessages(memExisting.id);
         return;
       }
 
-      let existingConvId: string | null = null;
-
-      // Check DB directly for shared direct conversations
-      const { data: myConvs } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id);
-
-      if (myConvs && myConvs.length > 0) {
-        const myConvIds = myConvs.map((c) => c.conversation_id);
-        const { data: shared } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .in('conversation_id', myConvIds)
-          .eq('user_id', recipient.id);
-
-        if (shared && shared.length > 0) {
-          const sharedIds = shared.map((s) => s.conversation_id);
-          const { data: directConvs } = await supabase
-            .from('conversations')
-            .select('id')
-            .in('id', sharedIds)
-            .eq('is_group', false)
-            .limit(1);
-
-          if (directConvs && directConvs.length > 0) {
-            existingConvId = directConvs[0].id;
-          }
-        }
-      }
-
-      if (existingConvId) {
-        await loadConversations();
-        handleSelectConversation(existingConvId);
-        return;
-      }
-
-      // 2. Generate a client UUID so we don't need .select() returning row (avoids RLS SELECT barrier)
-      const newConvId = crypto.randomUUID();
-
-      // 3. Insert conversation record without .select()
-      const { error: convErr } = await supabase
-        .from('conversations')
-        .insert({ id: newConvId, is_group: false });
-
-      if (convErr) {
-        console.error('Failed to create conversation:', convErr);
-        showToast(convErr.message || 'Failed to start chat. Please try again.');
-        return;
-      }
-
-      // 4. Add both members
-      const { error: memErr } = await supabase
-        .from('conversation_members')
-        .insert([
-          { conversation_id: newConvId, user_id: user.id, role: 'admin' },
-          { conversation_id: newConvId, user_id: recipient.id, role: 'member' },
-        ]);
-
-      if (memErr) {
-        console.error('Failed to add members:', memErr);
-        showToast(memErr.message || 'Failed to add conversation members.');
-        return;
-      }
-
-      // 5. Optimistically add conversation to state immediately so UI updates in 0ms
+      // 2. Prepare optimistic conversation object
+      const newConvId: string = crypto.randomUUID();
       const newConvObj: Conversation = {
         id: newConvId,
         title: null,
@@ -555,14 +522,85 @@ export const ChatDashboard: React.FC = () => {
         unread_count: 0,
       };
 
-      setConversations((prev) => [newConvObj, ...prev.filter((c) => c.id !== newConvId)]);
+      // Set state IMMEDIATELY so screen transitions with zero delay
+      setActiveConversation(newConvObj);
       setSelectedConversationId(newConvId);
+      setConversations((prev) => [newConvObj, ...prev.filter((c) => c.id !== newConvId)]);
       setMessages([]);
       setShowMobileChat(true);
 
-      // Background reload
-      loadConversations();
-      showToast('Chat started!', 'success');
+      // 3. Create or find conversation via API or database
+      let resolvedConvId: string = newConvId;
+
+      try {
+        const apiRes = await api.createConversation({ recipient_id: recipient.id });
+        if (apiRes && apiRes.id) {
+          resolvedConvId = apiRes.id;
+          if (resolvedConvId !== newConvId) {
+            newConvObj.id = resolvedConvId;
+            newConvObj.members.forEach((m) => (m.conversation_id = resolvedConvId));
+            setActiveConversation({ ...newConvObj });
+            setSelectedConversationId(resolvedConvId);
+            setConversations((prev) => [
+              { ...newConvObj },
+              ...prev.filter((c) => c.id !== newConvId && c.id !== resolvedConvId),
+            ]);
+          }
+        }
+      } catch (apiErr) {
+        // Direct database fallback
+        const { data: myConvs } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', user.id);
+
+        let existingConvId: string | null = null;
+        if (myConvs && myConvs.length > 0) {
+          const myConvIds = myConvs.map((c) => c.conversation_id);
+          const { data: shared } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .in('conversation_id', myConvIds)
+            .eq('user_id', recipient.id);
+
+          if (shared && shared.length > 0) {
+            const sharedIds = shared.map((s) => s.conversation_id);
+            const { data: directConvs } = await supabase
+              .from('conversations')
+              .select('id')
+              .in('id', sharedIds)
+              .eq('is_group', false)
+              .limit(1);
+
+            if (directConvs && directConvs.length > 0) {
+              existingConvId = directConvs[0].id;
+            }
+          }
+        }
+
+        if (existingConvId) {
+          resolvedConvId = existingConvId;
+          newConvObj.id = resolvedConvId;
+          newConvObj.members.forEach((m) => (m.conversation_id = resolvedConvId));
+          setActiveConversation({ ...newConvObj });
+          setSelectedConversationId(resolvedConvId);
+          setConversations((prev) => [
+            { ...newConvObj },
+            ...prev.filter((c) => c.id !== newConvId && c.id !== resolvedConvId),
+          ]);
+        } else {
+          // Insert conversation record
+          await supabase.from('conversations').insert({ id: newConvId, is_group: false });
+          // Insert members individually
+          await supabase.from('conversation_members').insert({ conversation_id: newConvId, user_id: user.id, role: 'admin' });
+          await supabase.from('conversation_members').insert({ conversation_id: newConvId, user_id: recipient.id, role: 'member' });
+        }
+      }
+
+      loadMessages(resolvedConvId);
+      setTimeout(() => {
+        loadConversations();
+      }, 500);
     } catch (err: any) {
       console.error('Unexpected error starting chat:', err);
       showToast(err.message || 'An unexpected error occurred.');
@@ -617,7 +655,9 @@ export const ChatDashboard: React.FC = () => {
     navigate('/');
   };
 
-  const selectedConversation = conversations.find((c) => c.id === selectedConversationId) ?? null;
+  const selectedConversation =
+    conversations.find((c) => c.id === selectedConversationId) ||
+    (activeConversation && activeConversation.id === selectedConversationId ? activeConversation : null);
 
   return (
     <div className="h-[100dvh] flex bg-[#090e17] overflow-hidden relative">

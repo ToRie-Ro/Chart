@@ -416,7 +416,7 @@ export const ProfilePage: React.FC = () => {
 
                 {!isOwnProfile && otherUser && (
                   <button
-                    onClick={() => navigate('/app')}
+                    onClick={() => navigate('/app', { state: { startChatWith: otherUser } })}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/25 transition"
                   >
                     <MessageSquare className="w-3.5 h-3.5" /> Send Message

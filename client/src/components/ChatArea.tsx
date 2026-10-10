@@ -213,16 +213,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   if (!conversation) {
     return (
-      <div className="flex-1 hidden md:flex flex-col items-center justify-center bg-[#090e17] text-center select-none">
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#090e17] text-center select-none p-6 relative">
+        {onBackMobile && (
+          <button
+            onClick={onBackMobile}
+            className="md:hidden absolute top-4 left-4 p-2.5 text-slate-300 hover:text-white bg-slate-900/90 border border-slate-800 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold shadow-lg"
+            aria-label="Back to conversations"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+        )}
         <motion.div
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="w-20 h-20 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-6"
+          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4 sm:mb-6"
         >
-          <Send className="w-9 h-9 -rotate-12" />
+          <Send className="w-8 h-8 sm:w-9 sm:h-9 -rotate-12" />
         </motion.div>
-        <h3 className="text-xl font-bold text-white mb-2">Select a conversation</h3>
-        <p className="text-sm text-slate-400 max-w-xs">Choose a chat from the sidebar or start a new one to begin messaging.</p>
+        <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Select a conversation</h3>
+        <p className="text-xs sm:text-sm text-slate-400 max-w-xs">Choose a chat from the sidebar or start a new one to begin messaging.</p>
       </div>
     );
   }

@@ -170,7 +170,7 @@ export const ContactsPage: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => navigate('/app')}
+                    onClick={() => navigate('/app', { state: { startChatWith: contact } })}
                     className="p-2.5 bg-blue-600/10 hover:bg-blue-600 text-cyan-400 hover:text-white rounded-xl transition flex-shrink-0"
                     title="Send Message"
                   >
