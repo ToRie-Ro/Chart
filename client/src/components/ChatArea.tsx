@@ -70,6 +70,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Active chat participant & live presence (must be called unconditionally at top level)
+  const otherMember = conversation?.members?.find((m) => m.user_id !== user?.id)?.profiles;
+  const { isOnline, statusText } = useLiveStatus(otherMember);
+
   // Helpers to detect media type
   const isImageType = (type?: string | null, name?: string | null) => {
     if (type) return type.startsWith('image/');
@@ -104,7 +108,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [messages, markAsRead]);
 
   const getReadStatus = (msg: Message): 'sent' | 'delivered' | 'read' => {
-    if (!conversation) return 'sent';
+    if (!conversation || !conversation.members) return 'sent';
     const otherMembers = conversation.members.filter(m => m.user_id !== user?.id);
     const anyRead = otherMembers.some(m => 
       m.last_read_at && new Date(m.last_read_at) >= new Date(msg.created_at)
@@ -236,10 +240,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     );
   }
 
-  const otherMember = conversation.members?.find((m) => m.user_id !== user?.id)?.profiles;
   const chatTitle = conversation.is_group ? (conversation.title || 'Group Chat') : (otherMember?.display_name || 'Unknown');
   const avatarUrl = conversation.is_group ? null : otherMember?.avatar_url;
-  const { isOnline, statusText } = useLiveStatus(otherMember);
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

@@ -10,6 +10,7 @@ import { UserProfileModal } from '../components/UserProfileModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export const ChatDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -766,16 +767,18 @@ export const ChatDashboard: React.FC = () => {
 
       {/* Chat area */}
       <main className={`flex-1 flex flex-col overflow-hidden ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-        <ChatArea
-          conversation={selectedConversation}
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onDeleteConversation={handleDeleteConversation}
-          onViewProfile={setViewingProfileUser}
-          onBackMobile={() => setShowMobileChat(false)}
-          loading={loadingMessages}
-        />
+        <ErrorBoundary fallbackTitle="Could not load conversation">
+          <ChatArea
+            conversation={selectedConversation}
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onDeleteConversation={handleDeleteConversation}
+            onViewProfile={setViewingProfileUser}
+            onBackMobile={() => setShowMobileChat(false)}
+            loading={loadingMessages}
+          />
+        </ErrorBoundary>
       </main>
 
       {/* New Chat Modal */}
