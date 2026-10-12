@@ -1,12 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, Eye, EyeOff, Loader2, Waves } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { useAuth } from '../context/AuthContext';
+
+const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6Lf9quctAAAAAOXpwr0aoNhbuP2Y8dag1zNTO6mf';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export const SignUpPage: React.FC = () => {
   const navigate = useNavigate();
   const { signUp, isConfigured } = useAuth();
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,21 +21,54 @@ export const SignUpPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  const handleCaptchaChange = useCallback((token: string | null) => {
+    setCaptchaToken(token);
+  }, []);
+
+  const resetCaptcha = () => {
+    recaptchaRef.current?.reset();
+    setCaptchaToken(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     if (!agreeTerms) { setError('You must agree to the Terms of Service'); return; }
+    if (!captchaToken) {
+      setError('Please complete the reCAPTCHA verification.');
+      return;
+    }
 
     setLoading(true);
     try {
+      // Server-side reCAPTCHA verification
+      const verifyRes = await fetch(`${API_BASE}/api/verify-recaptcha`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        setError('reCAPTCHA verification failed. Please try again.');
+        resetCaptcha();
+        return;
+      }
+
       const res = await signUp(email, password, fullName);
-      if (res.success) navigate(`/verify?email=${encodeURIComponent(email)}`);
-      else setError(res.error || 'Failed to create account.');
+      if (res.success) {
+        navigate(`/verify?email=${encodeURIComponent(email)}`);
+      } else {
+        setError(res.error || 'Failed to create account.');
+        resetCaptcha();
+      }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
+      resetCaptcha();
     } finally {
       setLoading(false);
     }
@@ -138,8 +177,20 @@ export const SignUpPage: React.FC = () => {
               <span>I agree to the <span className="text-cyan-400">Terms of Service</span> and <span className="text-cyan-400">Privacy Policy</span></span>
             </label>
 
-            <motion.button whileTap={{ scale: 0.98 }} type="submit" disabled={loading}
-              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+            {/* reCAPTCHA v2 */}
+            <div className="flex justify-center pt-1">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={SITE_KEY}
+                onChange={handleCaptchaChange}
+                onExpired={() => setCaptchaToken(null)}
+                theme="dark"
+              />
+            </div>
+
+            <motion.button whileTap={{ scale: 0.98 }} type="submit"
+              disabled={loading || !captchaToken}
+              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Create Account
@@ -151,6 +202,13 @@ export const SignUpPage: React.FC = () => {
             <Link to="/login" className="text-cyan-400 hover:underline font-semibold">Sign in</Link>
           </p>
         </div>
+
+        <p className="text-center text-[10px] text-slate-600 mt-4">
+          Protected by reCAPTCHA &mdash;{' '}
+          <a href="https://policies.google.com/privacy" className="hover:text-slate-400 transition" target="_blank" rel="noopener noreferrer">Privacy</a>
+          {' '}·{' '}
+          <a href="https://policies.google.com/terms" className="hover:text-slate-400 transition" target="_blank" rel="noopener noreferrer">Terms</a>
+        </p>
       </motion.div>
     </div>
   );

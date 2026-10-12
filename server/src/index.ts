@@ -63,7 +63,33 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// 2. API Routes
+// 2. reCAPTCHA v2 server-side verification
+app.post('/api/verify-recaptcha', async (req: Request, res: Response) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ success: false, error: 'Missing reCAPTCHA token.' });
+  }
+
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY || '6Lf9quctAAAAALsLTNlMy7zikzSbDa53PoEJFKTQ';
+
+  try {
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
+    const googleRes = await fetch(verifyUrl, { method: 'POST' });
+    const data = await googleRes.json() as { success: boolean; score?: number; 'error-codes'?: string[] };
+
+    if (data.success) {
+      return res.json({ success: true });
+    } else {
+      const codes = data['error-codes']?.join(', ') || 'unknown';
+      return res.status(400).json({ success: false, error: `reCAPTCHA failed: ${codes}` });
+    }
+  } catch (err: any) {
+    console.error('reCAPTCHA verification error:', err);
+    return res.status(500).json({ success: false, error: 'Verification service unavailable.' });
+  }
+});
+
+// 3. API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api', messageRoutes);
