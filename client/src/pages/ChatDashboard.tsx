@@ -7,6 +7,7 @@ import { ChatList } from '../components/ChatList';
 import { ChatArea } from '../components/ChatArea';
 import { NewChatModal } from '../components/NewChatModal';
 import { UserProfileModal } from '../components/UserProfileModal';
+import { VideoCallModal, CallSession } from '../components/VideoCallModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
@@ -27,8 +28,10 @@ export const ChatDashboard: React.FC = () => {
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [viewingProfileUser, setViewingProfileUser] = useState<UserProfile | null>(null);
+  const [activeCall, setActiveCall] = useState<CallSession | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'error' | 'success' } | null>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const callListenChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const showToast = (msg: string, type: 'error' | 'success' = 'error') => {
     setToast({ msg, type });
@@ -399,6 +402,34 @@ export const ChatDashboard: React.FC = () => {
       })
       .subscribe();
 
+    // Listen for incoming call requests targeted at this user
+    const userCallChannel = supabase.channel(`user-calls:${user.id}`, {
+      config: { broadcast: { self: false } },
+    });
+
+    userCallChannel
+      .on('broadcast', { event: 'incoming-call' }, ({ payload }) => {
+        if (payload && payload.receiver?.id === user.id) {
+          setActiveCall({
+            callId: payload.callId,
+            conversationId: payload.conversationId,
+            caller: payload.caller,
+            receiver: payload.receiver,
+            isVideo: payload.isVideo ?? true,
+            status: 'ringing',
+          });
+        }
+      })
+      .on('broadcast', { event: 'call-accepted' }, ({ payload }) => {
+        setActiveCall((prev) => (prev && prev.callId === payload.callId ? { ...prev, status: 'connected' } : prev));
+      })
+      .on('broadcast', { event: 'call-ended' }, ({ payload }) => {
+        setActiveCall((prev) => (prev && prev.callId === payload.callId ? null : prev));
+      })
+      .subscribe();
+
+    callListenChannelRef.current = userCallChannel;
+
     // Re-check conversations and status timestamps every 60s
     const refreshInterval = setInterval(() => {
       loadConversations();
@@ -406,6 +437,9 @@ export const ChatDashboard: React.FC = () => {
 
     return () => {
       supabase.removeChannel(profilesChannel);
+      if (callListenChannelRef.current) {
+        supabase.removeChannel(callListenChannelRef.current);
+      }
       clearInterval(refreshInterval);
     };
   }, [user?.id, isConfigured, loadConversations, viewingProfileUser?.id]);
@@ -418,6 +452,80 @@ export const ChatDashboard: React.FC = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // ─── Call Handlers ─────────────────────────────────────────────────────────
+  const handleStartCall = (isVideo: boolean) => {
+    if (!selectedConversation || !user || !profile) return;
+    const other = selectedConversation.members?.find((m) => m.user_id !== user.id)?.profiles;
+    if (!other) {
+      showToast('Could not find participant to call');
+      return;
+    }
+
+    const newCallId = crypto.randomUUID();
+    const session: CallSession = {
+      callId: newCallId,
+      conversationId: selectedConversation.id,
+      caller: profile,
+      receiver: other,
+      isVideo,
+      status: 'connected',
+    };
+
+    setActiveCall(session);
+
+    // Broadcast incoming-call event to the receiver's private channel
+    const receiverChannel = supabase.channel(`user-calls:${other.id}`);
+    receiverChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        receiverChannel.send({
+          type: 'broadcast',
+          event: 'incoming-call',
+          payload: {
+            ...session,
+            status: 'ringing',
+          },
+        });
+        setTimeout(() => supabase.removeChannel(receiverChannel), 1500);
+      }
+    });
+  };
+
+  const handleAcceptCall = () => {
+    if (!activeCall || !user) return;
+    setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+
+    // Notify caller that call was accepted
+    const callerChannel = supabase.channel(`user-calls:${activeCall.caller.id}`);
+    callerChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        callerChannel.send({
+          type: 'broadcast',
+          event: 'call-accepted',
+          payload: { callId: activeCall.callId },
+        });
+        setTimeout(() => supabase.removeChannel(callerChannel), 1500);
+      }
+    });
+  };
+
+  const handleEndCall = () => {
+    if (activeCall && user) {
+      const otherId = activeCall.caller.id === user.id ? activeCall.receiver.id : activeCall.caller.id;
+      const otherChannel = supabase.channel(`user-calls:${otherId}`);
+      otherChannel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          otherChannel.send({
+            type: 'broadcast',
+            event: 'call-ended',
+            payload: { callId: activeCall.callId },
+          });
+          setTimeout(() => supabase.removeChannel(otherChannel), 1500);
+        }
+      });
+    }
+    setActiveCall(null);
+  };
 
   // ─── Select conversation ───────────────────────────────────────────────────
   const handleSelectConversation = (id: string) => {
@@ -881,6 +989,7 @@ export const ChatDashboard: React.FC = () => {
             onDeleteMessage={handleDeleteMessage}
             onDeleteConversation={handleDeleteConversation}
             onViewProfile={setViewingProfileUser}
+            onStartCall={handleStartCall}
             onBackMobile={() => setShowMobileChat(false)}
             loading={loadingMessages}
           />
@@ -902,6 +1011,16 @@ export const ChatDashboard: React.FC = () => {
         onClose={() => setViewingProfileUser(null)}
         onStartChat={handleStartChatWithUser}
       />
+
+      {/* Video / Audio Call Modal */}
+      {activeCall && profile && (
+        <VideoCallModal
+          currentCall={activeCall}
+          currentUser={profile}
+          onEndCall={handleEndCall}
+          onAcceptCall={handleAcceptCall}
+        />
+      )}
     </div>
   );
 };

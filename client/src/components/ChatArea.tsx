@@ -28,6 +28,7 @@ interface ChatAreaProps {
   onDeleteMessage?: (id: string) => Promise<void>;
   onDeleteConversation?: (id: string) => Promise<void>;
   onViewProfile?: (user: UserProfile) => void;
+  onStartCall?: (isVideo: boolean) => void;
   onBackMobile?: () => void;
   loading?: boolean;
 }
@@ -43,7 +44,7 @@ const Avatar: React.FC<{ name: string; url?: string | null; sizeClass?: string }
 );
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
-  conversation, messages, onSendMessage, onDeleteMessage, onDeleteConversation, onViewProfile, onBackMobile, loading = false,
+  conversation, messages, onSendMessage, onDeleteMessage, onDeleteConversation, onViewProfile, onStartCall, onBackMobile, loading = false,
 }) => {
   const { user, profile } = useAuth();
   const [inputText, setInputText] = useState('');
@@ -354,9 +355,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1 text-slate-400 relative">
-          <button onClick={() => setShowSearch(p => !p)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Search className="w-4 h-4" /></button>
-          <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Phone className="w-4 h-4" /></button>
-          <button className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition"><Video className="w-4 h-4" /></button>
+          <button onClick={() => setShowSearch(p => !p)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition" title="Search messages"><Search className="w-4 h-4" /></button>
+          {!conversation.is_group && (
+            <>
+              <button
+                onClick={() => onStartCall && onStartCall(false)}
+                className="p-2 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition"
+                title="Voice Call"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => onStartCall && onStartCall(true)}
+                className="p-2 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition"
+                title="Video Call"
+              >
+                <Video className="w-4 h-4" />
+              </button>
+            </>
+          )}
           <button onClick={() => setShowMenu((prev) => !prev)} className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition">
             <MoreVertical className="w-4 h-4" />
           </button>
