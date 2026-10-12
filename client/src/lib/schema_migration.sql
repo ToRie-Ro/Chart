@@ -54,3 +54,40 @@ BEGIN
   END IF;
 END $$;
 
+-- Add email column to profiles if not already present
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
+
+-- Backfill profile emails from auth.users
+UPDATE public.profiles p
+SET email = u.email
+FROM auth.users u
+WHERE p.id = u.id AND (p.email IS NULL OR p.email = '');
+
+-- Update trigger function to also store email in profiles
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    default_name TEXT;
+    default_username TEXT;
+BEGIN
+    default_name := COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1));
+    default_username := LOWER(REGEXP_REPLACE(split_part(NEW.email, '@', 1), '[^a-zA-Z0-9_]', '', 'g')) || '_' || SUBSTRING(NEW.id::text, 1, 4);
+    
+    INSERT INTO public.profiles (id, display_name, username, email, avatar_url, bio)
+    VALUES (
+        NEW.id,
+        default_name,
+        default_username,
+        NEW.email,
+        NEW.raw_user_meta_data->>'avatar_url',
+        'Hello there! I am using Bluewave Chat.'
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        email = COALESCE(EXCLUDED.email, public.profiles.email),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+

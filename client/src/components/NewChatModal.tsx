@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { isUserOnline, formatUserStatus } from '../lib/statusHelper';
 
@@ -50,29 +51,76 @@ const DMScreen: React.FC<{
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null); setFound(null);
-    if (!query.trim()) return;
+    setError(null);
+    setFound(null);
+    const raw = query.trim();
+    if (!raw) return;
     setSearching(true);
+
     try {
-      const term = query.trim().toLowerCase();
-      const { data, error: err } = await supabase
+      const term = raw.toLowerCase();
+      const cleanTerm = term.startsWith('@') ? term.slice(1) : term;
+      const emailPrefix = term.includes('@') ? term.split('@')[0] : cleanTerm;
+
+      // 1. Direct Supabase query across username, display_name, or email (if column exists)
+      const orFilter = [
+        `username.ilike.%${cleanTerm}%`,
+        `display_name.ilike.%${raw}%`,
+        `username.ilike.%${emailPrefix}%`,
+        `display_name.ilike.%${emailPrefix}%`,
+      ].join(',');
+
+      let { data, error: err } = await supabase
         .from('profiles')
         .select('*')
-        .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
+        .or(orFilter)
         .neq('id', currentUserId || '')
-        .limit(1);
-      if (err) throw err;
-      if (data && data.length > 0) setFound(data[0]);
-      else {
-        const prefix = term.includes('@') ? term.split('@')[0] : term;
-        const { data: d2 } = await supabase
-          .from('profiles').select('*').ilike('username', `${prefix}%`)
-          .neq('id', currentUserId || '').limit(1);
-        if (d2 && d2.length > 0) setFound(d2[0]);
-        else setError('No user found. They must be registered on Chart.');
+        .limit(10);
+
+      // 2. Also check if query is exact username
+      if ((!data || data.length === 0) && cleanTerm) {
+        const { data: exactUser } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('username', cleanTerm)
+          .neq('id', currentUserId || '')
+          .limit(1);
+        if (exactUser && exactUser.length > 0) {
+          data = exactUser;
+        }
       }
-    } catch (e: any) { setError(e.message || 'Search failed.'); }
-    finally { setSearching(false); }
+
+      // 3. Fallback: try searching with api.searchUsers
+      if (!data || data.length === 0) {
+        try {
+          const apiResults = await api.searchUsers(raw);
+          if (apiResults && apiResults.length > 0) {
+            const filtered = apiResults.filter((u) => u.id !== currentUserId);
+            if (filtered.length > 0) data = filtered;
+          }
+        } catch {
+          // ignore api fallback error
+        }
+      }
+
+      if (data && data.length > 0) {
+        // Find best match: exact match on username or display name first
+        const best = data.find(
+          (u) =>
+            u.username?.toLowerCase() === cleanTerm ||
+            u.display_name?.toLowerCase() === raw.toLowerCase() ||
+            (u as any).email?.toLowerCase() === term
+        ) || data[0];
+
+        setFound(best);
+      } else {
+        setError('No user found. They must be registered on Chart.');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Search failed.');
+    } finally {
+      setSearching(false);
+    }
   };
 
   return (

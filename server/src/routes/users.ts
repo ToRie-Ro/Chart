@@ -51,7 +51,7 @@ router.get('/me', async (req: Request, res: Response, next: NextFunction): Promi
 // GET /api/users/search?q=query - Search registered users
 router.get('/search', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const query = (req.query.q as string || '').trim();
+    const raw = (req.query.q as string || '').trim();
     const currentUserId = req.user!.id;
     const userClient = createUserClient(req.token!);
 
@@ -61,8 +61,12 @@ router.get('/search', async (req: Request, res: Response, next: NextFunction): P
       .neq('id', currentUserId)
       .limit(20);
 
-    if (query) {
-      queryBuilder = queryBuilder.or(`display_name.ilike.%${query}%,username.ilike.%${query}%`);
+    if (raw) {
+      const clean = raw.startsWith('@') ? raw.slice(1) : raw;
+      const prefix = clean.includes('@') ? clean.split('@')[0] : clean;
+      queryBuilder = queryBuilder.or(
+        `display_name.ilike.%${clean}%,username.ilike.%${clean}%,display_name.ilike.%${prefix}%,username.ilike.%${prefix}%`
+      );
     }
 
     const { data: users, error } = await queryBuilder;
