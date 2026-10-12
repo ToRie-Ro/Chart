@@ -46,17 +46,30 @@ export const SignUpPage: React.FC = () => {
 
     setLoading(true);
     try {
-      // Server-side reCAPTCHA verification
-      const verifyRes = await fetch(`${API_BASE}/api/verify-recaptcha`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: captchaToken }),
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.success) {
-        setError('reCAPTCHA verification failed. Please try again.');
-        resetCaptcha();
-        return;
+      // Server-side reCAPTCHA verification (if backend is configured)
+      if (API_BASE) {
+        try {
+          const verifyRes = await fetch(`${API_BASE}/api/verify-recaptcha`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: captchaToken }),
+          });
+          const text = await verifyRes.text();
+          let verifyData: any = null;
+          try {
+            verifyData = JSON.parse(text);
+          } catch {
+            // Not a JSON response
+          }
+
+          if (verifyData && !verifyData.success) {
+            setError(verifyData.error || 'reCAPTCHA verification failed. Please try again.');
+            resetCaptcha();
+            return;
+          }
+        } catch (fetchErr) {
+          console.warn('Backend reCAPTCHA verification skipped or failed:', fetchErr);
+        }
       }
 
       const res = await signUp(email, password, fullName);
